@@ -1,5 +1,8 @@
 /**
  * @file ai_picture_output.c
+ * @brief Picture output module implementation.
+ *        Accumulates streamed JPEG chunks into a contiguous buffer,
+ *        saves the completed picture to the album, and notifies listeners.
  * @version 0.1
  * @copyright Copyright (c) 2021-2026 Tuya Inc. All Rights Reserved.
  */
@@ -13,33 +16,34 @@
 /***********************************************************
 ************************macro define************************
 ***********************************************************/
-#define AI_PICTURE_OUTPUT_WIDTH_KEY     "sys.device.img_resize.width"
-#define AI_PICTURE_OUTPUT_HEIGHT_KEY    "sys.device.img_resize.height"
+#define AI_PICTURE_OUTPUT_WIDTH_KEY  "sys.device.img_resize.width"
+#define AI_PICTURE_OUTPUT_HEIGHT_KEY "sys.device.img_resize.height"
 
 /***********************************************************
 ***********************typedef define***********************
 ***********************************************************/
 typedef struct {
-    bool      is_start;
-    uint32_t  total_size;
-    uint32_t  offset;
-    uint8_t  *acc_buf;
+    bool     is_start;
+    uint32_t total_size;
+    uint32_t offset;
+    uint8_t *acc_buf;
 } AI_PICTURE_STREAM_T;
 
 typedef struct {
-    uint16_t                 set_width;
-    uint16_t                 set_height;
+    uint16_t set_width;
+    uint16_t set_height;
 } AI_PICTURE_OUTPUT_CTX_T;
 
 /***********************************************************
 ***********************variable define**********************
 ***********************************************************/
-static AI_PICTURE_OUTPUT_CTX_T  sg_picture_output;
-static AI_PICTURE_STREAM_T      sg_ai_pic_stream;
+static AI_PICTURE_OUTPUT_CTX_T sg_picture_output;
+static AI_PICTURE_STREAM_T     sg_ai_pic_stream;
 
 /***********************************************************
 ***********************function define**********************
 ***********************************************************/
+
 /**
  * @brief Free partial JPEG accumulator and clear session state
  * @return none
@@ -52,29 +56,24 @@ static void __ai_picture_output_accum_reset(void)
     memset(&sg_ai_pic_stream, 0, sizeof(AI_PICTURE_STREAM_T));
 }
 
+/**
+ * @brief Event callback to push output picture dimensions to AI agent custom params
+ * @param[in] data unused
+ * @return 0 on success
+ */
 static int __set_output_picture_size_cb(void *data)
 {
     (void)data;
 
-    OPERATE_RET rt = OPRT_OK;
-    AI_CUSTOM_PAR_ITEM_T par_item_arr[2] = {0};
-
-    par_item_arr[0].key = AI_PICTURE_OUTPUT_WIDTH_KEY;
-    par_item_arr[0].type = AI_AGENT_PAR_VAL_TYPE_INT;
-    par_item_arr[0].value.int_val = sg_picture_output.set_width;
-    par_item_arr[0].is_effect_once = false;
-
-    par_item_arr[1].key = AI_PICTURE_OUTPUT_HEIGHT_KEY;
-    par_item_arr[1].type = AI_AGENT_PAR_VAL_TYPE_INT;
-    par_item_arr[1].value.int_val = sg_picture_output.set_height;
-    par_item_arr[1].is_effect_once = false;
-
-    TUYA_CALL_ERR_LOG(tuya_ai_agent_event_custom_param(NULL, \
-                                                      CNTSOF(par_item_arr),\
-                                                      par_item_arr));
     return 0;
 }
 
+/**
+ * @brief Set the desired output picture dimensions for AI image generation
+ * @param[in] width desired width in pixels
+ * @param[in] height desired height in pixels
+ * @return OPRT_OK on success
+ */
 OPERATE_RET ai_picture_output_set_size(uint16_t width, uint16_t height)
 {
     OPERATE_RET rt = OPRT_OK;
@@ -82,14 +81,21 @@ OPERATE_RET ai_picture_output_set_size(uint16_t width, uint16_t height)
     sg_picture_output.set_width  = width;
     sg_picture_output.set_height = height;
 
-    TUYA_CALL_ERR_LOG(tal_event_subscribe(EVENT_AI_SESSION_NEW, \
-                                         "set_output_picture_size",\
-                                         __set_output_picture_size_cb,\
+    TUYA_CALL_ERR_LOG(tal_event_subscribe(EVENT_AI_SESSION_NEW,
+                                          "set_output_picture_size",
+                                          __set_output_picture_size_cb,
                                           SUBSCRIBE_TYPE_NORMAL));
 
     return rt;
 }
 
+/**
+ * @brief Accumulate a JPEG chunk and save to album when all chunks are received
+ * @param[in] data JPEG chunk data
+ * @param[in] len chunk length in bytes
+ * @param[in] total_len total expected JPEG size in bytes
+ * @return OPRT_OK on success
+ */
 OPERATE_RET ai_picture_output_save_to_album(uint8_t *data, uint32_t len, uint32_t total_len)
 {
     OPERATE_RET rt = OPRT_OK;
@@ -100,14 +106,16 @@ OPERATE_RET ai_picture_output_save_to_album(uint8_t *data, uint32_t len, uint32_
     }
 
     if (false == sg_ai_pic_stream.is_start) {
+        PR_NOTICE("[pic_chain] start accumulating, total_len:%u", total_len);
         sg_ai_pic_stream.acc_buf = (uint8_t *)Malloc((size_t)total_len);
         if (sg_ai_pic_stream.acc_buf == NULL) {
+            PR_ERR("[pic_chain] malloc %u bytes failed", total_len);
             return OPRT_MALLOC_FAILED;
         }
 
         sg_ai_pic_stream.total_size = total_len;
-        sg_ai_pic_stream.offset = 0;
-        sg_ai_pic_stream.is_start = true;
+        sg_ai_pic_stream.offset     = 0;
+        sg_ai_pic_stream.is_start   = true;
     } else {
         if (sg_ai_pic_stream.total_size != total_len) {
             PR_ERR("get total size:%u is different %u", total_len, sg_ai_pic_stream.total_size);
@@ -117,21 +125,25 @@ OPERATE_RET ai_picture_output_save_to_album(uint8_t *data, uint32_t len, uint32_
     }
 
     if (len > total_len - sg_ai_pic_stream.offset) {
-        PR_ERR("chunk overflow: offset=%u len=%u total=%u",
-               sg_ai_pic_stream.offset, len, sg_ai_pic_stream.total_size);
+        PR_ERR("chunk overflow: offset=%u len=%u total=%u", sg_ai_pic_stream.offset, len, sg_ai_pic_stream.total_size);
         __ai_picture_output_accum_reset();
         return OPRT_BUFFER_NOT_ENOUGH;
     }
 
     memcpy(sg_ai_pic_stream.acc_buf + sg_ai_pic_stream.offset, data, (size_t)len);
     sg_ai_pic_stream.offset += len;
+    PR_DEBUG("[pic_chain] chunk accumulated, offset:%u/%u", sg_ai_pic_stream.offset, sg_ai_pic_stream.total_size);
 
     if (sg_ai_pic_stream.offset >= sg_ai_pic_stream.total_size) {
-        char name[ALBUM_FILENAME_MAX_LEN + 1] = {0};
+        PR_NOTICE("[pic_chain] all chunks received, total:%u, saving to album", sg_ai_pic_stream.total_size);
+        char name[AI_PICTURE_NAME_MAX_LEN + 1] = {0};
 
         rt = ai_picture_save_to_album(sg_ai_pic_stream.acc_buf, sg_ai_pic_stream.total_size, name);
         if (rt != OPRT_OK) {
-            PR_ERR("ai_picture_save_to_album failed, rt:%d", rt);
+            PR_ERR("[pic_chain] save to album failed, rt:%d", rt);
+        } else {
+            PR_NOTICE("[pic_chain] save to album success, name:%s, notify ACCEPT_PICTURE", name);
+            ai_user_event_notify(AI_USER_EVT_ACCEPT_PICTURE, name);
         }
 
         __ai_picture_output_accum_reset();

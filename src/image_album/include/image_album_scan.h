@@ -135,8 +135,9 @@ OPERATE_RET image_album_scan_next(IMAGE_ALBUM_SCAN_HANDLE scan_handle, ALBUM_IMA
  * @brief Get previous picture item in iteration
  *
  * Moves the iterator one step backward and returns that item.
- * Requires at least two @ref image_album_scan_next calls before the first
- * @ref image_album_scan_prev (there must be a preceding item to return).
+ * Requires at least one @ref image_album_scan_next call before the first
+ * @ref image_album_scan_prev. Returns OPRT_NOT_FOUND when already at the
+ * beginning (no previous item exists).
  *
  * After scan_prev returns item[N], a subsequent scan_next will return item[N+1].
  *
@@ -165,14 +166,13 @@ OPERATE_RET image_album_scan_deinit(IMAGE_ALBUM_SCAN_HANDLE scan_handle);
 /**
  * @brief Seek the scan iterator to an absolute position.
  *
- * Resets the internal cursor to @a pos so the next image_album_scan_next()
- * call returns the item at that position in the current sort order.
- * Seeking to 0 effectively rewinds to the beginning.
- * Seeking past the last item is allowed; the next scan_next will return
- * OPRT_NOT_FOUND.
+ * Sets the internal cursor to @a pos (1-based) so that the item at @a pos
+ * becomes the current item. A subsequent scan_next() returns pos+1,
+ * a subsequent scan_prev() returns pos-1.
+ * Seeking to 0 rewinds to before the first item (initial state).
  *
  * @param[in] scan_handle  Scan handle from image_album_scan_init()
- * @param[in] pos          Zero-based target position
+ * @param[in] pos          1-based target position (0 = reset to initial state)
  *
  * @return OPRT_OK on success
  * @return OPRT_INVALID_PARM if @a scan_handle is NULL

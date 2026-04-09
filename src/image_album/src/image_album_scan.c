@@ -30,7 +30,7 @@ typedef struct {
     IMAGE_ALBUM_HANDLE       album_handle;
     IMAGE_ALBUM_STORAGE_TP_E storage_tp;
     bool_t                   active;
-    uint32_t                 index;
+    int32_t                  index;      /**< current position, 1-based. 0 = before first item */
     uint32_t                 sorted_count;
     IMAGE_ALBUM_SORT_OPT_T   sort_opt;
     bool_t                   sort_applied;
@@ -189,7 +189,7 @@ static OPERATE_RET __scan_set_sort(ALBUM_SCAN_CTX_T *scan, const IMAGE_ALBUM_SOR
         return OPRT_COM_ERROR;
     }
 
-    if (scan->index > 0U) {
+    if (scan->index > 0) {
         PR_ERR("set_sort must be called before first scan_next");
         return OPRT_COM_ERROR;
     }
@@ -227,18 +227,20 @@ static OPERATE_RET __scan_next(ALBUM_SCAN_CTX_T *scan, ALBUM_IMAGE_ITEM_T *item)
         scan->sort_applied = TRUE;
     }
 
-    if (scan->index >= scan->sorted_count) {
-        return OPRT_NOT_FOUND;
-    }
-
     if (scan->sorted_indices == NULL || scan->entries == NULL) {
         return OPRT_NOT_FOUND;
     }
 
-    pic_idx = scan->sorted_indices[scan->index];
-    *item = scan->entries[pic_idx];
+    PR_DEBUG("scan_next: index=%d, sorted_count=%d", scan->index, scan->sorted_count);
+
+    if (scan->index >= (int32_t)scan->sorted_count) {
+        return OPRT_NOT_FOUND;
+    }
 
     scan->index++;
+    pic_idx = scan->sorted_indices[scan->index - 1];
+    *item = scan->entries[pic_idx];
+
     return OPRT_OK;
 }
 
@@ -261,18 +263,19 @@ static OPERATE_RET __scan_prev(ALBUM_SCAN_CTX_T *scan, ALBUM_IMAGE_ITEM_T *item)
         scan->sort_applied = TRUE;
     }
 
-    if (scan->index < 2U) {
-        return OPRT_NOT_FOUND;
-    }
-
     if (scan->sorted_indices == NULL || scan->entries == NULL) {
         return OPRT_NOT_FOUND;
     }
 
-    scan->index -= 2U;
-    pic_idx = scan->sorted_indices[scan->index];
+    PR_DEBUG("scan_prev: index=%d, sorted_count=%d", scan->index, scan->sorted_count);
+
+    if (scan->index <= 1) {
+        return OPRT_NOT_FOUND;
+    }
+
+    scan->index--;
+    pic_idx = scan->sorted_indices[scan->index - 1];
     *item = scan->entries[pic_idx];
-    scan->index++;
 
     return OPRT_OK;
 }
@@ -333,7 +336,7 @@ int image_album_scan_init(char *name, IMAGE_ALBUM_STORAGE_TP_E storage_tp, IMAGE
         return (int)rt;
     }
 
-    scan->index = 0U;
+    scan->index = 0;
     scan->sort_opt.key = IMAGE_ALBUM_SORT_NONE;
     scan->sort_opt.order = IMAGE_ALBUM_SORT_ASC;
     scan->sort_applied = FALSE;
@@ -459,7 +462,7 @@ OPERATE_RET image_album_scan_deinit(IMAGE_ALBUM_SCAN_HANDLE scan_handle)
 /**
  * @brief Seek the scan iterator to an absolute position
  * @param[in] scan_handle Scan handle from @ref image_album_scan_init
- * @param[in] pos         Zero-based target position
+ * @param[in] pos         1-based target position (1 = first item, 0 = reset to before first)
  * @return OPRT_OK on success
  */
 OPERATE_RET image_album_scan_seek(IMAGE_ALBUM_SCAN_HANDLE scan_handle, uint32_t pos)
@@ -481,6 +484,7 @@ OPERATE_RET image_album_scan_seek(IMAGE_ALBUM_SCAN_HANDLE scan_handle, uint32_t 
         scan->sort_applied = TRUE;
     }
 
-    scan->index = pos;
+    scan->index = (int32_t)pos;
+    PR_DEBUG("scan_seek: pos=%d, index=%d, sorted_count=%d", pos, scan->index, scan->sorted_count);
     return OPRT_OK;
 }
