@@ -25,7 +25,7 @@ extern "C" {
 ***********************************************************/
 #define EVENT_REBOOT_REQ                                                                                               \
     "dev.reboot.req" // device health check reboot request, application should subscribe it if needed
-#define EVENT_REBOOT_ACK        "dev.reboot.ack" // device health check reboot ack, application should publish when it ready
+#define EVENT_REBOOT_ACK "dev.reboot.ack" // device health check reboot ack, application should publish when it ready
 #define EVENT_LAN_CLIENT_CLOSE  "lan.cli.close" // lan client close
 #define EVENT_RSC_UPDATE        "rsc.update"    // register center changed
 #define EVENT_HEALTH_ALERT      "health.alert"  // health alert
@@ -36,6 +36,9 @@ extern "C" {
 #define EVENT_MQTT_DISCONNECTED "mqtt.disc"     // mqtt disconnect
 #define EVENT_TIME_SYNC         "time.sync"     // time sync
 #define EVENT_LINK_ACTIVATE     "link.activate" // linkage got activate info
+
+#define EVENT_AI_CLIENT_RUN   "ai.client.run"   // ai client run
+#define EVENT_AI_CLIENT_CLOSE "ai.client.close" // ai client close
 
 /***********************************************************
 ***********************typedef define***********************
