@@ -1,318 +1,141 @@
 /**
  * @file ai_picture_output.c
- * @brief Picture output implementation.
- *
- * This file provides functions for downloading pictures from URLs via HTTP
- * and outputting them through callback functions, with event notification support.
- *
- * @copyright Copyright (c) 2021-2025 Tuya Inc. All Rights Reserved.
- *
+ * @version 0.1
+ * @copyright Copyright (c) 2021-2026 Tuya Inc. All Rights Reserved.
  */
 
 #include "tal_api.h"
-#include "http_session.h"
-#include "mix_method.h"
+#include "tuya_ai_agent.h"
+#include "ai_user_event.h"
 
 #include "ai_picture_output.h"
 
 /***********************************************************
 ************************macro define************************
 ***********************************************************/
-#define GET_IMAGE_BUF_LEN 1024
+#define AI_PICTURE_OUTPUT_WIDTH_KEY     "sys.device.img_resize.width"
+#define AI_PICTURE_OUTPUT_HEIGHT_KEY    "sys.device.img_resize.height"
 
 /***********************************************************
 ***********************typedef define***********************
 ***********************************************************/
-typedef enum {
-    GET_IMGE_CMD_START = 0,
-    GET_IMGE_CMD_STOP,
-}GET_IMGE_CMD_T;
-
+typedef struct {
+    bool      is_start;
+    uint32_t  total_size;
+    uint32_t  offset;
+    uint8_t  *acc_buf;
+} AI_PICTURE_STREAM_T;
 
 typedef struct {
-    GET_IMGE_CMD_T cmd;
-    char *url;
-}GET_IMGE_MSG_T;
-
-typedef struct{
-    bool             is_start;
-    THREAD_HANDLE    task;
-    QUEUE_HANDLE     queue;
-    uint32_t         wait_queue_time;
-    http_session_t   session;
-    uint32_t         img_size;
-    uint32_t         offset;
-    uint8_t          rev_buf[GET_IMAGE_BUF_LEN];
-}GET_IMAGE_CTX_T;
+    uint16_t                 set_width;
+    uint16_t                 set_height;
+} AI_PICTURE_OUTPUT_CTX_T;
 
 /***********************************************************
 ***********************variable define**********************
 ***********************************************************/
-static GET_IMAGE_CTX_T            *sg_get_img_ctx = NULL;
-static AI_PICTURE_OUTPUT_NOTIFY_CB sg_notify_cb = NULL;
-static AI_PICTURE_OUTPUT_CB        sg_output_cb = NULL;
+static AI_PICTURE_OUTPUT_CTX_T  sg_picture_output;
+static AI_PICTURE_STREAM_T      sg_ai_pic_stream;
+
 /***********************************************************
 ***********************function define**********************
 ***********************************************************/
 /**
- * @brief Notify picture output event to registered callback.
- *
- * @param event Event type to notify.
+ * @brief Free partial JPEG accumulator and clear session state
+ * @return none
  */
-static void __notify_picture_event(AI_PICTURE_OUTPUT_EVENT_E event)
+static void __ai_picture_output_accum_reset(void)
 {
-    AI_PICTURE_OUTPUT_NOTIFY_T info;
-
-    if(NULL == sg_get_img_ctx) {
-        return;
-    }   
-
-    if(sg_notify_cb) {
-        info.event = event;
-        info.total_size = sg_get_img_ctx->img_size;
-
-        sg_notify_cb(&info);
+    if (sg_ai_pic_stream.acc_buf != NULL) {
+        Free(sg_ai_pic_stream.acc_buf);
     }
+    memset(&sg_ai_pic_stream, 0, sizeof(AI_PICTURE_STREAM_T));
 }
 
-/**
- * @brief Stop downloading picture stream and cleanup resources.
- */
-static void __download_picture_stream_stop(void)
+static int __set_output_picture_size_cb(void *data)
 {
-    if(NULL == sg_get_img_ctx) {
-        return;
-    }
+    (void)data;
 
-    sg_get_img_ctx->is_start = false;
-    sg_get_img_ctx->offset = 0;
-    sg_get_img_ctx->img_size = 0;
-
-    if(sg_get_img_ctx->session) {
-        PR_NOTICE("Closing HTTP session");
-        http_close_session(&sg_get_img_ctx->session);
-        sg_get_img_ctx->session = NULL;   
-    }
-}
-
-/**
- * @brief Start downloading picture stream from URL.
- *
- * @param url Pointer to the picture URL string.
- */
-static void __download_picture_stream_start(char *url)
-{
     OPERATE_RET rt = OPRT_OK;
-    http_resp_t *response = NULL;
-    uint32_t  image_size = 0;
+    AI_CUSTOM_PAR_ITEM_T par_item_arr[2] = {0};
 
-    if(NULL == url || NULL == sg_get_img_ctx) {
-        PR_ERR("url is null");
-        return;
-    }
+    par_item_arr[0].key = AI_PICTURE_OUTPUT_WIDTH_KEY;
+    par_item_arr[0].type = AI_AGENT_PAR_VAL_TYPE_INT;
+    par_item_arr[0].value.int_val = sg_picture_output.set_width;
+    par_item_arr[0].is_effect_once = false;
 
-    rt = http_open_session(&sg_get_img_ctx->session, url, 5000);
-    if(rt != OPRT_OK) {
-        PR_ERR("http_open_session failed: %d", rt);
-        goto __START_ERR;
-    }
-    PR_NOTICE("HTTP session opened successfully");
+    par_item_arr[1].key = AI_PICTURE_OUTPUT_HEIGHT_KEY;
+    par_item_arr[1].type = AI_AGENT_PAR_VAL_TYPE_INT;
+    par_item_arr[1].value.int_val = sg_picture_output.set_height;
+    par_item_arr[1].is_effect_once = false;
 
-    http_req_t request;
-    memset(&request, 0, sizeof(http_req_t));
-    request.type = HTTP_GET;
-    request.version = HTTP_VER_1_1;
-
-    TUYA_CALL_ERR_GOTO(http_send_request(sg_get_img_ctx->session, &request, 0), __START_ERR);
-
-    TUYA_CALL_ERR_GOTO(http_get_response_hdr(sg_get_img_ctx->session, &response), __START_ERR);
-    if(response->status_code != 200) {
-        PR_ERR("http response code invalid: %d", response->status_code);
-        goto __START_ERR;
-    }
-
-    image_size = response->content_length;
-
-    http_free_response_hdr(&response); 
-
-    sg_get_img_ctx->img_size = image_size;
-    sg_get_img_ctx->offset = 0;
-
-    __notify_picture_event(AI_PICTURE_OUTPUT_START);
-
-    sg_get_img_ctx->wait_queue_time = 1;
-    sg_get_img_ctx->is_start = true;
-
-    return;
-
-__START_ERR:
-    if(response) {
-        http_free_response_hdr(&response);
-    }
-
-    __download_picture_stream_stop();
-
-    return;
+    TUYA_CALL_ERR_LOG(tuya_ai_agent_event_custom_param(NULL, \
+                                                      CNTSOF(par_item_arr),\
+                                                      par_item_arr));
+    return 0;
 }
 
-/**
- * @brief Download picture stream data and output through callback.
- */
-static void __download_picture_stream(void)
-{
-    if(NULL == sg_get_img_ctx || false == sg_get_img_ctx->is_start) {
-        return;
-    }
-
-    int len = http_read_content(sg_get_img_ctx->session, \
-                                sg_get_img_ctx->rev_buf,\
-                                GET_IMAGE_BUF_LEN);
-
-    if(len > 0) {
-        if(sg_output_cb) {
-            bool is_eof = (sg_get_img_ctx->offset + len >= sg_get_img_ctx->img_size) ? true : false;
-            sg_output_cb(sg_get_img_ctx->rev_buf, len, is_eof);
-        }
-
-        sg_get_img_ctx->offset += len;
-    }else if(len == 0) {
-        PR_NOTICE("download image complete, size: %d offset:%d", sg_get_img_ctx->img_size, sg_get_img_ctx->offset);
-
-        __download_picture_stream_stop();
-        __notify_picture_event(AI_PICTURE_OUTPUT_SUCCESS);
-    }else {
-        PR_ERR("download image error: %d", len);
-
-        __download_picture_stream_stop();
-        __notify_picture_event(AI_PICTURE_OUTPUT_FAILED);
-    }
-}
-
-/**
- * @brief Picture download task thread function.
- *
- * @param arg Thread argument (unused).
- */
-static void __download_picture_task(void *arg)
-{
-    GET_IMGE_MSG_T msg = {0};
-
-    while(tal_thread_get_state(sg_get_img_ctx->task) == THREAD_STATE_RUNNING) {
-        if (tal_queue_fetch(sg_get_img_ctx->queue, &msg, sg_get_img_ctx->wait_queue_time) != OPRT_OK) {
-            if(true == sg_get_img_ctx->is_start) {
-                __download_picture_stream();
-            }
-
-            continue;
-        }
-
-        switch(msg.cmd) {
-            case GET_IMGE_CMD_START:
-                __download_picture_stream_start(msg.url);
-                break;
-            case GET_IMGE_CMD_STOP:
-                __download_picture_stream_stop();
-                break;
-            default:
-                break;
-        }
-
-        if(msg.url) {
-            tal_free(msg.url);
-            msg.url = NULL;
-        }
-    
-    }
-}
-/**
- * @brief Initialize the picture output module.
- *
- * @param cfg Pointer to the output configuration structure.
- * @return OPERATE_RET Operation result code.
- */
-OPERATE_RET ai_picture_output_init(AI_PICTURE_OUTPUT_CFG_T *cfg)
+OPERATE_RET ai_picture_output_set_size(uint16_t width, uint16_t height)
 {
     OPERATE_RET rt = OPRT_OK;
 
-    TUYA_CHECK_NULL_RETURN(cfg, OPRT_INVALID_PARM);
+    sg_picture_output.set_width  = width;
+    sg_picture_output.set_height = height;
 
-    sg_get_img_ctx = (GET_IMAGE_CTX_T *)Malloc(sizeof(GET_IMAGE_CTX_T));
-    TUYA_CHECK_NULL_RETURN(sg_get_img_ctx, OPRT_MALLOC_FAILED);
-    memset(sg_get_img_ctx, 0, sizeof(GET_IMAGE_CTX_T));
-
-    TUYA_CALL_ERR_RETURN(tal_queue_create_init(&sg_get_img_ctx->queue, sizeof(GET_IMGE_MSG_T), 2));
-
-    THREAD_CFG_T thrd_param;
-
-    memset(&thrd_param, 0, sizeof(THREAD_CFG_T));
-    thrd_param.stackDepth = 1024 * 4;
-    thrd_param.priority = THREAD_PRIO_1;
-    thrd_param.thrdname = "get_picture_task";
-
-    TUYA_CALL_ERR_RETURN(tal_thread_create_and_start(&sg_get_img_ctx->task, NULL, NULL,\
-                                                     __download_picture_task, NULL,\
-                                                     &thrd_param));
-
-    sg_notify_cb = cfg->notify_cb;
-    sg_output_cb = cfg->output_cb;
+    TUYA_CALL_ERR_LOG(tal_event_subscribe(EVENT_AI_SESSION_NEW, \
+                                         "set_output_picture_size",\
+                                         __set_output_picture_size_cb,\
+                                          SUBSCRIBE_TYPE_NORMAL));
 
     return rt;
 }
 
-/**
- * @brief Start downloading and outputting picture from URL.
- *
- * @param url Pointer to the picture URL string.
- * @return OPERATE_RET Operation result code.
- */
-OPERATE_RET ai_picture_output_start(char *url)
+OPERATE_RET ai_picture_output_save_to_album(uint8_t *data, uint32_t len, uint32_t total_len)
 {
     OPERATE_RET rt = OPRT_OK;
-    GET_IMGE_MSG_T msg = {0};
 
-    TUYA_CHECK_NULL_RETURN(url, OPRT_INVALID_PARM);
-    TUYA_CHECK_NULL_RETURN(sg_get_img_ctx, OPRT_INVALID_PARM);
-
-    memset(&msg, 0, sizeof(GET_IMGE_MSG_T));
-
-    msg.cmd = GET_IMGE_CMD_START;
-    msg.url = mm_strdup(url);
-
-    TUYA_CALL_ERR_RETURN(tal_queue_post(sg_get_img_ctx->queue, &msg, QUEUE_WAIT_FOREVER));
-
-    return rt;
-}
-
-/**
- * @brief Stop picture output and cleanup resources.
- *
- * @return OPERATE_RET Operation result code.
- */
-OPERATE_RET ai_picture_output_stop(void)
-{
-    OPERATE_RET rt = OPRT_OK;
-    GET_IMGE_MSG_T msg = {0};
-
-    TUYA_CHECK_NULL_RETURN(sg_get_img_ctx, OPRT_INVALID_PARM);
-
-    memset(&msg, 0, sizeof(GET_IMGE_MSG_T));
-    msg.cmd = GET_IMGE_CMD_STOP;
-
-    TUYA_CALL_ERR_RETURN(tal_queue_post(sg_get_img_ctx->queue, &msg, QUEUE_WAIT_FOREVER));
-
-    return rt;
-}
-
-/**
- * @brief Check if picture output module is initialized.
- *
- * @return true if initialized, false otherwise.
- */
-bool ai_picture_is_init(void)
-{
-    if(NULL == sg_get_img_ctx) {
-        return false;
+    if (NULL == data || len == 0 || total_len == 0) {
+        PR_ERR("invalid param, data:%p, len:%u, total_len:%u", data, len, total_len);
+        return OPRT_INVALID_PARM;
     }
 
-    return true;
+    if (false == sg_ai_pic_stream.is_start) {
+        sg_ai_pic_stream.acc_buf = (uint8_t *)Malloc((size_t)total_len);
+        if (sg_ai_pic_stream.acc_buf == NULL) {
+            return OPRT_MALLOC_FAILED;
+        }
+
+        sg_ai_pic_stream.total_size = total_len;
+        sg_ai_pic_stream.offset = 0;
+        sg_ai_pic_stream.is_start = true;
+    } else {
+        if (sg_ai_pic_stream.total_size != total_len) {
+            PR_ERR("get total size:%u is different %u", total_len, sg_ai_pic_stream.total_size);
+            __ai_picture_output_accum_reset();
+            return OPRT_COM_ERROR;
+        }
+    }
+
+    if (len > total_len - sg_ai_pic_stream.offset) {
+        PR_ERR("chunk overflow: offset=%u len=%u total=%u",
+               sg_ai_pic_stream.offset, len, sg_ai_pic_stream.total_size);
+        __ai_picture_output_accum_reset();
+        return OPRT_BUFFER_NOT_ENOUGH;
+    }
+
+    memcpy(sg_ai_pic_stream.acc_buf + sg_ai_pic_stream.offset, data, (size_t)len);
+    sg_ai_pic_stream.offset += len;
+
+    if (sg_ai_pic_stream.offset >= sg_ai_pic_stream.total_size) {
+        char name[ALBUM_FILENAME_MAX_LEN + 1] = {0};
+
+        rt = ai_picture_save_to_album(sg_ai_pic_stream.acc_buf, sg_ai_pic_stream.total_size, name);
+        if (rt != OPRT_OK) {
+            PR_ERR("ai_picture_save_to_album failed, rt:%d", rt);
+        }
+
+        __ai_picture_output_accum_reset();
+    }
+
+    return rt;
 }

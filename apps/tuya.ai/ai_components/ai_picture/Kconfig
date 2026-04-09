@@ -1,3 +1,22 @@
 menuconfig ENABLE_COMP_AI_PICTURE
     bool "enable ai picture"
+    select ENABLE_IMAGE_ALBUM
     default n
+
+if(ENABLE_COMP_AI_PICTURE)
+    config COMP_AI_PICTURE_ALBUM_NAME
+        string "ai picture album name"
+        default "ai_picture"
+
+    config COMP_AI_PICTURE_ALBUM_MAX_IMAGE_CNT
+        int "the max count of image in album"
+        default 10
+
+    config COMP_AI_PICTURE_DEF_OUTPIUT_WIDTH
+        int "ai picture output default width"
+        default 320
+
+    config COMP_AI_PICTURE_DEF_OUTPIUT_HEIGHT
+        int "ai picture output default height"
+        default 480
+endif

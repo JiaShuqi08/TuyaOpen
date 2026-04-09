@@ -1,7 +1,9 @@
 ##
 # @file CMakeLists.txt
-# @brief 
+# @brief Image Album Component
 #/
+
+if (CONFIG_ENABLE_IMAGE_ALBUM STREQUAL "y")
 
 # MODULE_PATH
 set(MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR})
@@ -10,23 +12,21 @@ set(MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR})
 get_filename_component(MODULE_NAME ${MODULE_PATH} NAME)
 
 # LIB_SRCS
-# Root source files
-file(GLOB ROOT_SRCS "${MODULE_PATH}/src/*.c")
+file(GLOB LIB_SRCS "${MODULE_PATH}/src/*.c")
 
-# md5 source files
-file(GLOB TJPEG_SRCS "${MODULE_PATH}/src/tjpgd/*.c")
+if (CONFIG_ENABLE_IMAGE_ALBUM_STORAGE_MEM STREQUAL "y")
+    list(APPEND LIB_SRCS ${MODULE_PATH}/src/storage/image_album_storage_mem.c)
+endif()
 
-# Combine all source files
-set(LIB_SRCS
-    ${ROOT_SRCS}
-    ${TJPEG_SRCS}
-)
+if (CONFIG_ENABLE_IMAGE_ALBUM_STORAGE_SD STREQUAL "y")
+    list(APPEND LIB_SRCS ${MODULE_PATH}/src/storage/image_album_storage_sd.c)
+endif()
 
 # LIB_PUBLIC_INC
 set(LIB_PUBLIC_INC ${MODULE_PATH}/include)
 
 # LIB_PRIVATE_INC
-set(LIB_PRIVATE_INC ${MODULE_PATH}/src ${MODULE_PATH}/src/tjpgd)
+set(LIB_PRIVATE_INC ${MODULE_PATH}/src)
 
 ########################################
 # Target Configure
@@ -46,6 +46,12 @@ target_include_directories(${MODULE_NAME}
         ${LIB_PUBLIC_INC}
     )
 
+target_link_libraries(${MODULE_NAME}
+    PUBLIC
+        tal_system
+        tal_image
+        common
+    )
 
 ########################################
 # Layer Configure
@@ -55,3 +61,4 @@ set(COMPONENT_LIBS "${COMPONENT_LIBS}" PARENT_SCOPE)
 list(APPEND COMPONENT_PUBINC ${LIB_PUBLIC_INC})
 set(COMPONENT_PUBINC "${COMPONENT_PUBINC}" PARENT_SCOPE)
 
+endif()

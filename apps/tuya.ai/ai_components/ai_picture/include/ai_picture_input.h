@@ -1,23 +1,15 @@
 /**
- * @file tal_image.h
- * @brief Image processing module interface definitions.
- *
- * This header provides a unified interface for image processing operations
- * including rotation, color space conversion, and binary conversion.
- *
- * @copyright Copyright (c) 2021-2025 Tuya Inc. All Rights Reserved.
- *
+ * @file ai_picture_input.h
+ * @brief ai_picture_input module is used to 
+ * @version 0.1
+ * @copyright Copyright (c) 2021-2026 Tuya Inc. All Rights Reserved.
  */
 
-#ifndef __TAL_IMAGE_H__
-#define __TAL_IMAGE_H__
+#ifndef __AI_PICTURE_INPUT_H__
+#define __AI_PICTURE_INPUT_H__
 
 #include "tuya_cloud_types.h"
-#include "tal_image_yuv422_to_rgb.h"
-#include "tal_image_yuv422_to_binary.h"
-#include "tal_image_rotate.h"
-#include "tal_image_jpeg_codec.h"
-#include "tal_image_scale.h"
+#include "ai_picture.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -26,7 +18,7 @@ extern "C" {
 /***********************************************************
 ************************macro define************************
 ***********************************************************/
-
+#define AI_PICTURE_INPUT_MAX_NUM 3
 
 /***********************************************************
 ***********************typedef define***********************
@@ -36,10 +28,17 @@ extern "C" {
 /***********************************************************
 ********************function declaration********************
 ***********************************************************/
+OPERATE_RET ai_picture_input_add_from_album(char *filename);
+
+OPERATE_RET ai_picture_input_del_from_album(char *filename);
+
+OPERATE_RET ai_picture_input_send(void);
+
+uint32_t ai_picture_input_get_num(void);
 
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* __TAL_IMAGE_H__ */
+#endif /* __AI_PICTURE_INPUT_H__ */

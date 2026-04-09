@@ -2,7 +2,7 @@
 # @file CMakeLists.txt
 # @brief 
 #/
-
+if (CONFIG_ENABLE_LIBJPEGTURBO STREQUAL "y")
 # MODULE_PATH
 set(MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR})
 
@@ -14,20 +14,22 @@ get_filename_component(MODULE_NAME ${MODULE_PATH} NAME)
 file(GLOB ROOT_SRCS "${MODULE_PATH}/src/*.c")
 
 # md5 source files
-file(GLOB TJPEG_SRCS "${MODULE_PATH}/src/tjpgd/*.c")
+file(GLOB MD5_SRCS "${MODULE_PATH}/src/md5/*.c")
 
 # Combine all source files
 set(LIB_SRCS
     ${ROOT_SRCS}
-    ${TJPEG_SRCS}
+    ${MD5_SRCS}
 )
 
 # LIB_PUBLIC_INC
-set(LIB_PUBLIC_INC ${MODULE_PATH}/include)
+set(LIB_PUBLIC_INC 
+    ${MODULE_PATH}/include)
 
-# LIB_PRIVATE_INC
-set(LIB_PRIVATE_INC ${MODULE_PATH}/src ${MODULE_PATH}/src/tjpgd)
+set(LIB_PRIVATE_INC 
+    ${MODULE_PATH}/src)
 
+set(LIB_OPTIONS "-w")
 ########################################
 # Target Configure
 ########################################
@@ -46,7 +48,10 @@ target_include_directories(${MODULE_NAME}
         ${LIB_PUBLIC_INC}
     )
 
-
+target_compile_options(${MODULE_NAME}
+    PRIVATE
+        ${LIB_OPTIONS}
+    )
 ########################################
 # Layer Configure
 ########################################
@@ -55,3 +60,4 @@ set(COMPONENT_LIBS "${COMPONENT_LIBS}" PARENT_SCOPE)
 list(APPEND COMPONENT_PUBINC ${LIB_PUBLIC_INC})
 set(COMPONENT_PUBINC "${COMPONENT_PUBINC}" PARENT_SCOPE)
 
+endif()
