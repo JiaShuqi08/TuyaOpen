@@ -17,6 +17,11 @@
 #include "ai_ui_stream_text.h"
 #include "ai_ui_manage.h"
 
+#if defined(ENABLE_COMP_AI_PICTURE) && (ENABLE_COMP_AI_PICTURE == 1)
+#include "ai_picture.h"
+#include "tal_image_jpeg_codec.h"
+#endif
+
 /***********************************************************
 ************************macro define************************
 ***********************************************************/
@@ -155,8 +160,23 @@ static void __ui_disp_msg_handle(AI_UI_MSG_T *msg_data)
             if (sg_ui_intfs.disp_ai_chat_mode) {
                 sg_ui_intfs.disp_ai_chat_mode(msg_data->data);
             }
-        } 
+        }
         break ;
+#if defined(ENABLE_COMP_AI_PICTURE) && (ENABLE_COMP_AI_PICTURE == 1)
+        case AI_UI_DISP_PICTURE: {
+            if (sg_ui_intfs.disp_jpeg_picture && msg_data->data) {
+                AI_PICTURE_INFO_T pic = {0};
+                OPERATE_RET rt = ai_picture_get_by_name(msg_data->data, &pic);
+                if (OPRT_OK == rt && pic.data && pic.len > 0) {
+                    sg_ui_intfs.disp_jpeg_picture(pic.data, pic.len);
+                } else {
+                    PR_ERR("get picture by name failed, rt:%d", rt);
+                }
+                ai_picture_free_pic_info(&pic);
+            }
+        }
+        break;
+#endif
         default:
             if (sg_ui_intfs.disp_other_msg) {
                 sg_ui_intfs.disp_other_msg(msg_data->type, (uint8_t *)msg_data->data, msg_data->len);

@@ -118,6 +118,14 @@ void ai_chat_ui_handle_event(AI_NOTIFY_EVENT_T *event)
 
         ai_ui_disp_msg(AI_UI_DISP_CHAT_MODE, (uint8_t *)name, strlen(name));
     } break;
+#if defined(ENABLE_COMP_AI_PICTURE) && (ENABLE_COMP_AI_PICTURE == 1)
+    case AI_USER_EVT_ACCEPT_PICTURE: {
+        char *pic_name = (char *)event->data;
+        if (pic_name && strlen(pic_name) > 0) {
+            ai_ui_disp_msg(AI_UI_DISP_PICTURE, (uint8_t *)pic_name, strlen(pic_name));
+        }
+    } break;
+#endif
     default:
         break;
     }

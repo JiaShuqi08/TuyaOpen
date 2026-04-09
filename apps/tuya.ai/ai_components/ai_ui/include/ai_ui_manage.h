@@ -42,12 +42,14 @@ typedef enum {
     AI_UI_DISP_AI_MSG_STREAM_DATA,
     AI_UI_DISP_AI_MSG_STREAM_END,
     AI_UI_DISP_AI_MSG_STREAM_INTERRUPT,
+    AI_UI_DISP_AI_PICTURE,
     AI_UI_DISP_SYSTEM_MSG,
     AI_UI_DISP_EMOTION,
     AI_UI_DISP_STATUS,
     AI_UI_DISP_NOTIFICATION,
     AI_UI_DISP_NETWORK,
     AI_UI_DISP_CHAT_MODE,
+    AI_UI_DISP_PICTURE,
     AI_UI_DISP_SYS_MAX,
 }AI_UI_DISP_TYPE_E;
 typedef enum {
@@ -81,8 +83,7 @@ typedef struct {
     OPERATE_RET (*disp_camera_end)(void);
 
 #if defined(ENABLE_COMP_AI_PICTURE) && (ENABLE_COMP_AI_PICTURE == 1)
-    OPERATE_RET (*disp_picture)(TUYA_FRAME_FMT_E fmt, uint16_t width, uint16_t height,\
-                                uint8_t *data, uint32_t len);
+    OPERATE_RET (*disp_jpeg_picture)(uint8_t *jpeg, uint32_t len);
 #endif
 
 }AI_UI_INTFS_T;

@@ -741,19 +741,6 @@ static void __return_chat_content_event_cb(lv_event_t *e)
 }
 
 /**
- * @brief Picture display timeout callback.
- *
- * @param timer Pointer to the timer object.
- */
-static void __picture_timeout_cb(lv_timer_t *timer)
-{
-    lv_timer_pause(sg_picture_tm);
-
-    lv_obj_add_flag(sg_ui.picture, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_clear_flag(sg_ui.content, LV_OBJ_FLAG_HIDDEN);
-}
-
-/**
  * @brief Display picture on UI.
  *
  * @param fmt Picture frame format.
@@ -763,50 +750,51 @@ static void __picture_timeout_cb(lv_timer_t *timer)
  * @param len Length of the picture data.
  * @return OPERATE_RET Operation result code.
  */
-static OPERATE_RET __disp_picture(TUYA_FRAME_FMT_E fmt, uint16_t width, uint16_t height,\
-                                uint8_t *data, uint32_t len)
+static OPERATE_RET __disp_picture(uint8_t *jpeg_data, uint32_t jpeg_len)
 {
-    if(fmt != TUYA_FRAME_FMT_RGB565) {
-        PR_ERR("not support fmt:%d", fmt);
-        return OPRT_NOT_SUPPORTED;
+    TAL_IMAGE_JPEG_INFO_T info = {0};
+
+    if (tal_image_jpeg_get_info(jpeg_data, jpeg_len, &info) != OPRT_OK) {
+        TAL_PR_ERR("wechat: jpeg get info failed");
+        return OPRT_COM_ERROR;
+    }
+
+    uint32_t rgb565_size = info.width * info.height * 2;
+    uint8_t *rgb565_buf = Malloc(rgb565_size);
+    if (rgb565_buf == NULL) {
+        PR_ERR("wechat: malloc rgb565 buf failed, size=%u", rgb565_size);
+        return OPRT_COM_ERROR;
+    }
+
+    TAL_IMAGE_JPEG_OUTPUT_T out = {0};
+    out.out_buf      = rgb565_buf;
+    out.out_buf_size = rgb565_size;
+    out.out_width    = info.width;
+    out.out_height   = info.height;
+
+    if (tal_image_jpeg_decode_rgb565(jpeg_data, jpeg_len, &out) != OPRT_OK) {
+        TAL_PR_ERR("wechat: jpeg decode rgb565 failed");
+        Free(rgb565_buf);
+        return OPRT_COM_ERROR;
     }
 
     lv_vendor_disp_lock();
 
-    if(sg_ui.picture_canvas) {
-        lv_obj_delete(sg_ui.picture_canvas);
-        sg_ui.picture_canvas = NULL;
+    if(NULL == sg_ui.picture_canvas) {
+        sg_ui.picture_canvas = lv_canvas_create(sg_ui.picture);
+        lv_obj_set_size(sg_ui.picture_canvas, LV_HOR_RES, LV_VER_RES);
+        lv_obj_add_flag(sg_ui.picture_canvas, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_add_event_cb(sg_ui.picture_canvas, __return_chat_content_event_cb, LV_EVENT_CLICKED, NULL);
     }
+
+    lv_canvas_set_buffer(sg_ui.picture_canvas, rgb565_buf, 
+                         info.width, info.height, LV_COLOR_FORMAT_RGB565);
 
     if(sg_picture_buffer) {
         Free(sg_picture_buffer);
         sg_picture_buffer = NULL;
     }
-
-    sg_ui.picture_canvas = lv_canvas_create(sg_ui.picture);
-    lv_obj_set_pos(sg_ui.picture_canvas, 0, 0);
-    lv_obj_set_size(sg_ui.picture_canvas, width, height);
-    lv_obj_add_flag(sg_ui.picture_canvas, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_add_event_cb(sg_ui.picture_canvas, __return_chat_content_event_cb, LV_EVENT_CLICKED, NULL);
-
-    sg_picture_buffer = (uint8_t *)Malloc(len);
-    if(NULL == sg_picture_buffer) {
-        PR_ERR("malloc picture buffer failed");
-        lv_vendor_disp_unlock();
-        return OPRT_MALLOC_FAILED;
-    }
-
-    memcpy(sg_picture_buffer, data, len);
-
-    lv_canvas_set_buffer(sg_ui.picture_canvas, sg_picture_buffer, width, height, LV_COLOR_FORMAT_RGB565);
-    if (NULL == sg_picture_tm) {
-        sg_picture_tm = lv_timer_create(__picture_timeout_cb, 3000, NULL);
-    } else {
-        lv_timer_reset(sg_picture_tm);
-    }
-
-    lv_obj_add_flag(sg_ui.content, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_clear_flag(sg_ui.picture, LV_OBJ_FLAG_HIDDEN);
+    sg_picture_buffer = rgb565_buf;
 
     lv_obj_t *label = __create_ai_msg_label(sg_ui.content, VIEW_IMAGE);
     lv_obj_add_style(label, &sg_ui.style_link, LV_STATE_DEFAULT);
@@ -853,7 +841,7 @@ OPERATE_RET ai_ui_chat_wechat_register(void)
 #endif
 
 #if defined(ENABLE_COMP_AI_PICTURE) && (ENABLE_COMP_AI_PICTURE == 1)
-    intfs.disp_picture             = __disp_picture;
+    intfs.disp_jpeg_picture        = __disp_picture;
 #endif
 
     return ai_ui_register(&intfs);
