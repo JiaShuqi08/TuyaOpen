@@ -50,6 +50,16 @@ typedef enum {
     AI_UI_DISP_CHAT_MODE,
     AI_UI_DISP_SYS_MAX,
 }AI_UI_DISP_TYPE_E;
+typedef enum {
+    AI_UI_ACTION_OPEN_CAMERA,   
+    AI_UI_ACTION_TAKE_PHOTO, 
+    AI_UI_ACTION_CLOSE_CAMER, 
+    AI_UI_ACTION_OPEN_IMG_LIST,
+    AI_UI_ACTION_CLOSE_IMG_LIST,
+    AI_UI_ACTION_IMAGE_SELECTED,
+    AI_UI_ACTION_IMAGE_UNSELECTED,
+    AI_UI_ACTION_MAX
+} AI_UI_ACTION_E;
 
 typedef struct {
     OPERATE_RET (*disp_init)(void);
@@ -76,6 +86,7 @@ typedef struct {
 #endif
 
 }AI_UI_INTFS_T;
+typedef OPERATE_RET (*AI_UI_ACTION_CB)(AI_UI_ACTION_E action, void *data);
 
 /***********************************************************
 ********************function declaration********************
@@ -106,46 +117,30 @@ OPERATE_RET ai_ui_init(void);
 OPERATE_RET ai_ui_disp_msg(AI_UI_DISP_TYPE_E tp, uint8_t *data, int len);
 
 /**
- * @brief Start camera display.
+ * @brief Display message on UI and block until the UI thread has finished dispatch.
  *
- * @param width Camera frame width.
- * @param height Camera frame height.
+ * @param tp Display type indicating the message category.
+ * @param data Pointer to the message data.
+ * @param len Length of the message data.
  * @return OPERATE_RET Operation result code.
+ * @note Synchronizes via a semaphore after queueing; registered callbacks run on the UI
+ *       worker thread. Do not call from that same thread or deadlock will occur.
  */
-OPERATE_RET ai_ui_camera_start(uint16_t width, uint16_t height);
+OPERATE_RET ai_ui_disp_msg_sync(AI_UI_DISP_TYPE_E tp, uint8_t *data, int len);
 
 /**
- * @brief Flush camera frame data to display.
+ * @brief Notify that an action menu item was touched (for internal use by UI implementation).
  *
- * @param data Pointer to the camera frame data.
- * @param width Frame width.
- * @param height Frame height.
- * @return OPERATE_RET Operation result code.
+ * @param action Action id: AI_UI_ACTION_TAKE_PHOTO, AI_UI_ACTION_IMAGE_RECOG, etc.
  */
-OPERATE_RET ai_ui_camera_flush(uint8_t *data, uint16_t width, uint16_t height);
+ void ai_ui_action_cb_register(AI_UI_ACTION_CB action_cb);
 
 /**
- * @brief End camera display.
+ * @brief Notify that an action menu item was touched (for internal use by UI implementation).
  *
- * @return OPERATE_RET Operation result code.
+ * @param action Action id: AI_UI_ACTION_TAKE_PHOTO, AI_UI_ACTION_IMAGE_RECOG, etc.
  */
-OPERATE_RET ai_ui_camera_end(void);
-
-
-#if defined(ENABLE_COMP_AI_PICTURE) && (ENABLE_COMP_AI_PICTURE == 1)
-/**
- * @brief Display picture on UI.
- *
- * @param fmt Picture frame format.
- * @param width Picture width.
- * @param height Picture height.
- * @param data Pointer to the picture data.
- * @param len Length of the picture data.
- * @return OPERATE_RET Operation result code.
- */
-OPERATE_RET ai_ui_disp_picture(TUYA_FRAME_FMT_E fmt, uint16_t width, uint16_t height,\
-                                uint8_t *data, uint32_t len);
-#endif
+ void ai_ui_notify_action(AI_UI_ACTION_E action, void *data);
 
 #ifdef __cplusplus
 }

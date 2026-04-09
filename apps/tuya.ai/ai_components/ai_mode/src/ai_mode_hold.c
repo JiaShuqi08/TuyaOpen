@@ -16,8 +16,14 @@
 #include "tdl_led_manage.h"
 #endif
 
+#if defined(ENABLE_COMP_AI_PICTURE) && (ENABLE_COMP_AI_PICTURE == 1)
+#include "ai_picture_input.h"
+#endif
+
 #include "lang_config.h"
 #include "ai_user_event.h"
+
+#include "mix_method.h"
 
 #include "ai_audio_input.h"
 #include "ai_audio_player.h"
@@ -136,7 +142,6 @@ static OPERATE_RET __ai_mode_hold_init(void)
     ai_audio_input_wakeup_mode_set(AI_AUDIO_VAD_MANUAL);
 
     //create idle timer
-    TIMER_ID sg_enter_idle_timer = NULL;
     TUYA_CALL_ERR_RETURN(tal_sw_timer_create(__ai_mode_enter_idle_time_cb, NULL, &sg_enter_idle_timer));
 
     // disable vad
@@ -252,7 +257,17 @@ static OPERATE_RET __ai_mode_hold_vad_change(AI_AUDIO_VAD_STATE_E vad_flag)
 
     if (AI_AUDIO_VAD_START == vad_flag) {
         tuya_ai_agent_set_scode(AI_AGENT_SCODE_DEFAULT);
+
+#if defined(ENABLE_COMP_AI_PICTURE) && (ENABLE_COMP_AI_PICTURE == 1)
+        if(ai_picture_input_get_num()) {
+            tuya_ai_input_start(true);
+            ai_picture_input_send();
+        }else {
+            tuya_ai_input_start(false);
+        }
+#else
         tuya_ai_input_start(false);
+#endif
     } else {
         tuya_ai_input_stop();
     }

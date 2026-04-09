@@ -41,6 +41,9 @@ extern "C" {
 #define SYSTEM_MSG_WIFI_DISCONNECTED "WiFi 断开连接"
 #define SYSTEM_MSG_VOLUME "音量设置为"
 #define VIEW_IMAGE "查看图片"
+#define TAKE_PHOTO "拍照"
+#define ADD_IMAGE "添加图片"
+#define CANCEL "取消"
 
 #ifdef __cplusplus
 }

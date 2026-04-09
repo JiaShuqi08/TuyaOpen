@@ -156,7 +156,6 @@ static OPERATE_RET __ai_mode_free_init(void)
     tkl_kws_enable();
 
     //create idle timer
-    TIMER_ID sg_enter_idle_timer = NULL;
     TUYA_CALL_ERR_RETURN(tal_sw_timer_create(__ai_mode_enter_idle_time_cb, NULL, &sg_enter_idle_timer));
 
     MODE_STATE_CHANGE(sg_mode_set_state, AI_MODE_STATE_IDLE);

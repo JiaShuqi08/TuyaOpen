@@ -11,6 +11,7 @@
 
 #include "tal_api.h"
 #include "tuya_ringbuf.h"
+#include <string.h>
 
 #include "ai_ui_icon_font.h"
 #include "ai_ui_stream_text.h"
@@ -29,7 +30,13 @@ typedef struct {
     AI_UI_DISP_TYPE_E type;
     int               len;
     char             *data;
+    SEM_HANDLE        sync_sem;
 } AI_UI_MSG_T;
+
+typedef struct {
+    AI_UI_ACTION_E action;
+    void          *data;
+} AI_UI_ACTION_MSG_T;
 
 /***********************************************************
 ***********************variable define**********************
@@ -37,21 +44,29 @@ typedef struct {
 static AI_UI_INTFS_T sg_ui_intfs;
 static QUEUE_HANDLE  sg_ui_queue_hdl;
 static THREAD_HANDLE sg_ui_thrd_hdl;
+static AI_UI_ACTION_CB sg_action_cb = NULL;
+static QUEUE_HANDLE  sg_action_queue_hdl;
+static THREAD_HANDLE sg_action_thrd_hdl;
+
 /***********************************************************
 ***********************function define**********************
 ***********************************************************/
 /**
  * @brief Handle UI display message based on message type.
  *
- * @param msg_data Pointer to the message data structure.
+ * @param[in] msg_data Pointer to the message data structure.
+ * @return none
+ * @note Binary payloads (video flush, JPEG) use layouts documented per case; pointers
+ *       passed to UI callbacks reference msg_data->data and are only valid for the
+ *       duration of the callback.
  */
 static void __ui_disp_msg_handle(AI_UI_MSG_T *msg_data)
 {
-    if(NULL == msg_data) {
+    if (NULL == msg_data) {
         return;
     }
 
-    switch(msg_data->type) {
+    switch (msg_data->type) {
         case AI_UI_DISP_USER_MSG: {
             if(sg_ui_intfs.disp_user_msg) {
                 sg_ui_intfs.disp_user_msg(msg_data->data);
@@ -135,18 +150,18 @@ static void __ui_disp_msg_handle(AI_UI_MSG_T *msg_data)
                 sg_ui_intfs.disp_wifi_state(((AI_UI_WIFI_STATUS_E*)msg_data->data)[0]);
             }
         } 
-        break ;
+        break;
         case AI_UI_DISP_CHAT_MODE: {
-            if(sg_ui_intfs.disp_ai_chat_mode) {                 
+            if (sg_ui_intfs.disp_ai_chat_mode) {
                 sg_ui_intfs.disp_ai_chat_mode(msg_data->data);
             }
         } 
         break ;
         default:
-            if(sg_ui_intfs.disp_other_msg) {
+            if (sg_ui_intfs.disp_other_msg) {
                 sg_ui_intfs.disp_other_msg(msg_data->type, (uint8_t *)msg_data->data, msg_data->len);
             }
-        break;    
+            break;
     }
 }
 
@@ -167,10 +182,40 @@ static void __ai_chat_ui_task(void *args)
 
         __ui_disp_msg_handle(&msg_data);
 
+        if (msg_data.sync_sem != NULL) {
+            tal_semaphore_post(msg_data.sync_sem);
+        }
+
         if (msg_data.data) {
             Free(msg_data.data);
         }
         msg_data.data = NULL;
+    }
+}
+
+/**
+ * @brief AI UI action dispatch task thread function.
+ *
+ * @param args Thread argument (unused).
+ * @return none
+ */
+static void __ai_chat_ui_action_task(void *args)
+{
+    AI_UI_ACTION_MSG_T msg_data = {0};
+
+    (void)args;
+
+    for (;;) {
+        memset(&msg_data, 0, sizeof(AI_UI_ACTION_MSG_T));
+        tal_queue_fetch(sg_action_queue_hdl, &msg_data, SEM_WAIT_FOREVER);
+
+        if (msg_data.action >= AI_UI_ACTION_MAX) {
+            continue;
+        }
+
+        if (sg_action_cb != NULL) {
+            sg_action_cb(msg_data.action, msg_data.data);
+        }
     }
 }
 
@@ -204,24 +249,31 @@ OPERATE_RET ai_ui_init(void)
     OPERATE_RET rt = OPRT_OK;
 
     TUYA_CALL_ERR_RETURN(tal_queue_create_init(&sg_ui_queue_hdl, sizeof(AI_UI_MSG_T), 8));
+    TUYA_CALL_ERR_RETURN(tal_queue_create_init(&sg_action_queue_hdl, sizeof(AI_UI_ACTION_MSG_T), 8));
 
-    THREAD_CFG_T cfg;
-    memset(&cfg, 0x00, sizeof(THREAD_CFG_T));
-    cfg.thrdname = "ai_ui";
-    cfg.priority = THREAD_PRIO_2;
-    cfg.stackDepth = 1024 * 4;
+    THREAD_CFG_T thrd_cfg;
+    memset(&thrd_cfg, 0x00, sizeof(THREAD_CFG_T));
+    thrd_cfg.thrdname = "ai_ui";
+    thrd_cfg.priority = THREAD_PRIO_2;
+    thrd_cfg.stackDepth = 1024 * 4;
 
-    TUYA_CALL_ERR_RETURN(tal_thread_create_and_start(&sg_ui_thrd_hdl, NULL, NULL, __ai_chat_ui_task, NULL, &cfg));
+    TUYA_CALL_ERR_RETURN(tal_thread_create_and_start(&sg_ui_thrd_hdl, NULL, NULL, __ai_chat_ui_task, NULL, &thrd_cfg));
+
+    memset(&thrd_cfg, 0x00, sizeof(THREAD_CFG_T));
+    thrd_cfg.thrdname = "ai_ui_action";
+    thrd_cfg.priority = THREAD_PRIO_2;
+    thrd_cfg.stackDepth = 1024 * 4;
+    TUYA_CALL_ERR_RETURN(tal_thread_create_and_start(&sg_action_thrd_hdl, NULL, NULL, __ai_chat_ui_action_task, NULL, &thrd_cfg));
 
 #if defined(ENABLE_AI_UI_TEXT_STREAMING) && (ENABLE_AI_UI_TEXT_STREAMING == 1)
     TUYA_CALL_ERR_RETURN(ai_ui_stream_text_init(__ai_chat_ui_stream_text_disp));
 #endif
 
-    if(sg_ui_intfs.disp_init) {
+    if (sg_ui_intfs.disp_init) {
         TUYA_CALL_ERR_RETURN(sg_ui_intfs.disp_init());
     }
-    
-    PR_DEBUG("ai chat ui init success");   
+
+    PR_DEBUG("ai chat ui init success");
 
     return OPRT_OK;
 }
@@ -238,6 +290,7 @@ OPERATE_RET ai_ui_disp_msg(AI_UI_DISP_TYPE_E tp, uint8_t *data, int len)
 {
     AI_UI_MSG_T msg_data;
 
+    memset(&msg_data, 0, sizeof(AI_UI_MSG_T));
     msg_data.type = tp;
     msg_data.len = len;
     if (len && data != NULL) {
@@ -255,74 +308,92 @@ OPERATE_RET ai_ui_disp_msg(AI_UI_DISP_TYPE_E tp, uint8_t *data, int len)
 }
 
 /**
- * @brief Start camera display.
+ * @brief Display message on UI and block until the UI thread has finished dispatch.
  *
- * @param width Camera frame width.
- * @param height Camera frame height.
+ * @param tp Display type indicating the message category.
+ * @param data Pointer to the message data.
+ * @param len Length of the message data.
  * @return OPERATE_RET Operation result code.
+ * @note Uses a binary semaphore: the message is queued like ai_ui_disp_msg, then the
+ *       caller waits until the UI worker posts after handling. Do not call from the
+ *       UI worker thread (ai_ui) or deadlock will occur.
  */
-OPERATE_RET ai_ui_camera_start(uint16_t width, uint16_t height)
+OPERATE_RET ai_ui_disp_msg_sync(AI_UI_DISP_TYPE_E tp, uint8_t *data, int len)
 {
-    if(sg_ui_intfs.disp_camera_start) {
-        return sg_ui_intfs.disp_camera_start(width, height);
+    AI_UI_MSG_T msg_data;
+    SEM_HANDLE  sync_sem = NULL;
+    OPERATE_RET rt = OPRT_OK;
+
+    memset(&msg_data, 0, sizeof(AI_UI_MSG_T));
+    msg_data.type = tp;
+    msg_data.len = len;
+    if (len && data != NULL) {
+        msg_data.data = (char *)Malloc(len + 1);
+        if (NULL == msg_data.data) {
+            return OPRT_MALLOC_FAILED;
+        }
+        memcpy(msg_data.data, data, len);
+        msg_data.data[len] = 0; /* "\0" */
     }
 
-    return OPRT_NOT_SUPPORTED;
+    rt = tal_semaphore_create_init(&sync_sem, 0, 1);
+    if (OPRT_OK != rt) {
+        if (msg_data.data) {
+            Free(msg_data.data);
+        }
+        return rt;
+    }
+    msg_data.sync_sem = sync_sem;
+
+    rt = tal_queue_post(sg_ui_queue_hdl, &msg_data, SEM_WAIT_FOREVER);
+    if (OPRT_OK != rt) {
+        tal_semaphore_release(sync_sem);
+        if (msg_data.data) {
+            Free(msg_data.data);
+        }
+        return rt;
+    }
+
+    rt = tal_semaphore_wait_forever(sync_sem);
+    tal_semaphore_release(sync_sem);
+
+    return rt;
 }
 
 /**
- * @brief Flush camera frame data to display.
+ * @brief Notify that an action menu item was touched (for internal use by UI implementation).
  *
- * @param data Pointer to the camera frame data.
- * @param width Frame width.
- * @param height Frame height.
- * @return OPERATE_RET Operation result code.
+ * @param action Action id: AI_UI_ACTION_TAKE_PHOTO, AI_UI_ACTION_IMAGE_RECOG, etc.
  */
-OPERATE_RET ai_ui_camera_flush(uint8_t *data, uint16_t width, uint16_t height)
-{
-    if(sg_ui_intfs.disp_camera_flush) {
-        return sg_ui_intfs.disp_camera_flush(data, width, height);
-    }
-
-    return OPRT_NOT_SUPPORTED;
-}
+ void ai_ui_action_cb_register(AI_UI_ACTION_CB action_cb)
+ {
+    sg_action_cb = action_cb;
+ }
 
 /**
- * @brief End camera display.
+ * @brief Notify that an action menu item was touched. Called by UI impl (e.g. wechat); invokes cfg->action_cb if set.
  *
- * @return OPERATE_RET Operation result code.
+ * @param action Action id: AI_UI_ACTION_TAKE_PHOTO, AI_UI_ACTION_IMAGE_RECOG, etc.
+ * @param data Pointer to the data.
  */
-OPERATE_RET ai_ui_camera_end(void)
+void ai_ui_notify_action(AI_UI_ACTION_E action, void *data)
 {
-    if(sg_ui_intfs.disp_camera_end) {
-        return sg_ui_intfs.disp_camera_end();
+    AI_UI_ACTION_MSG_T msg_data;
+
+    if (action >= AI_UI_ACTION_MAX) {
+        return;
     }
 
-    return OPRT_NOT_SUPPORTED;
-}
-
-
-#if defined(ENABLE_COMP_AI_PICTURE) && (ENABLE_COMP_AI_PICTURE == 1)
-/**
- * @brief Display picture on UI.
- *
- * @param fmt Picture frame format.
- * @param width Picture width.
- * @param height Picture height.
- * @param data Pointer to the picture data.
- * @param len Length of the picture data.
- * @return OPERATE_RET Operation result code.
- */
-OPERATE_RET ai_ui_disp_picture(TUYA_FRAME_FMT_E fmt, uint16_t width, uint16_t height,\
-                                uint8_t *data, uint32_t len)
-{
-    if(sg_ui_intfs.disp_picture) {
-        return sg_ui_intfs.disp_picture(fmt, width, height, data, len);
+    if (sg_action_cb == NULL) {
+        return;
     }
 
-    return OPRT_NOT_SUPPORTED;
+    memset(&msg_data, 0, sizeof(AI_UI_ACTION_MSG_T));
+    msg_data.action = action;
+    msg_data.data = data;
+
+    tal_queue_post(sg_action_queue_hdl, &msg_data, SEM_WAIT_FOREVER);
 }
-#endif
 
 /**
  * @brief Register UI interface callbacks.
@@ -338,4 +409,3 @@ OPERATE_RET ai_ui_register(AI_UI_INTFS_T *intfs)
 
     return OPRT_OK;
 }
-

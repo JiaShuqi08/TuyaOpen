@@ -126,51 +126,6 @@ static OPERATE_RET __ai_asr_process(cJSON *root, bool eof)
     return OPRT_OK;
 }
 
-#if defined(ENABLE_COMP_AI_PICTURE) && (ENABLE_COMP_AI_PICTURE == 1)
-/**
- * @brief Process image URLs from JSON and start picture output.
- *
- * @param root JSON root object containing images data.
- * @return OPERATE_RET Operation result code.
- */
-static OPERATE_RET __ai_images_process(cJSON *root)
-{
-    cJSON *images = cJSON_GetObjectItem(root, "images");
-    TUYA_CHECK_NULL_RETURN(images, OPRT_COM_ERROR);
-
-    cJSON *url_array = cJSON_GetObjectItem(images, "url");
-    if(NULL == url_array || !cJSON_IsArray(url_array)) {
-        PR_ERR("no url array found");
-        return OPRT_COM_ERROR;
-    }
-
-    int url_count = cJSON_GetArraySize(url_array);
-    for(int i = 0; i < url_count; i++) {
-        cJSON *url_item = cJSON_GetArrayItem(url_array, i);
-        if(NULL == url_item) {
-            PR_ERR("url item is null");
-            continue;
-        }
-
-        const char *url_str = __json_get_string(url_item);
-        if(NULL == url_str) {
-            PR_ERR("url string is null");
-            continue;
-        }
-
-        PR_NOTICE("image url[%d]: %s", i, url_str);
-
-        /* #define TEST_IMG_URL "https://images.tuyacn.com/fe-static/docs/img/bef36953-4002-4a7c-b567-db05a6c5e2cd.jpeg" */
-
-        /* ai_picture_output_start(TEST_IMG_URL); */
-        ai_picture_output_start(url_str);
-    }
-
-    return OPRT_OK;
-}
-#endif 
-
-
 /**
  * @brief Process NLG (Natural Language Generation) text stream.
  *
@@ -184,21 +139,7 @@ static OPERATE_RET __ai_nlg_process(cJSON *root, bool eof)
     PR_NOTICE("json-str %s", json_str);
     cJSON_free(json_str);
 
-    cJSON *nlgResult = cJSON_GetObjectItem(root, "nlgResult");
-    if(nlgResult) {
-#if defined(ENABLE_COMP_AI_PICTURE) && (ENABLE_COMP_AI_PICTURE == 1)
-        if(ai_picture_is_init() == true) {
-            if(__ai_images_process(nlgResult) != OPRT_OK) {
-                PR_NOTICE("process nlg images failed");
-            }else {
-                PR_NOTICE("process nlg images success");
-            }
-        }
-#endif
-        return OPRT_OK;
-    }
-
-    const char *content = __json_get_string(cJSON_GetObjectItem(root, "content"));
+    char *content = cJSON_GetStringValue(cJSON_GetObjectItem(root, "content"));
     if (!content) {
         content = "";
     }

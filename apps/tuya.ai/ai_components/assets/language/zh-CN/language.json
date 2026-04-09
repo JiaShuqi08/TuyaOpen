@@ -36,6 +36,10 @@
         "SYSTEM_MSG_WIFI_DISCONNECTED":"WiFi 断开连接",
         "SYSTEM_MSG_VOLUME":"音量设置为",
 
-        "VIEW_IMAGE":"查看图片"
+        "VIEW_IMAGE":"查看图片",
+        
+        "TAKE_PHOTO":"拍照",
+        "ADD_IMAGE":"添加图片",
+        "CANCEL":"取消"
     }
 }
