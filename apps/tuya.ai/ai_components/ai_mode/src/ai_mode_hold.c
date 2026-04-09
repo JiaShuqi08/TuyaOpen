@@ -261,7 +261,7 @@ static OPERATE_RET __ai_mode_hold_vad_change(AI_AUDIO_VAD_STATE_E vad_flag)
 #if defined(ENABLE_COMP_AI_PICTURE) && (ENABLE_COMP_AI_PICTURE == 1)
         if(ai_picture_input_get_num()) {
             tuya_ai_input_start(true);
-            ai_picture_input_send();
+            ai_picture_input_from_album();
         }else {
             tuya_ai_input_start(false);
         }
