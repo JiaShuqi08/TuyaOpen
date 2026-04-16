@@ -594,17 +594,23 @@ static OPERATE_RET __send_bitmap_escpos(TDL_PRINTER_NODE_T *node,
     uint16_t total_width = x + eff_width;
     uint16_t total_bytes = (total_width + 7) / 8;
 
+    /* Allocate row buffer before sending the command header so that a malloc
+     * failure leaves the printer state untouched. */
+    uint8_t *row_buf = (uint8_t *)tal_malloc(total_bytes);
+    if (row_buf == NULL) {
+        return OPRT_MALLOC_FAILED;
+    }
+
     /* GS v 0 command */
     uint8_t cmd[] = {
         0x1D, 0x76, 0x30, 0x00,
         (uint8_t)(total_bytes & 0xFF), (uint8_t)(total_bytes >> 8),
         (uint8_t)(height & 0xFF),      (uint8_t)(height >> 8)
     };
-    TUYA_CALL_ERR_RETURN(node->intfs.write(node->tdd_handle, cmd, sizeof(cmd)));
-
-    uint8_t *row_buf = (uint8_t *)tal_malloc(total_bytes);
-    if (row_buf == NULL) {
-        return OPRT_MALLOC_FAILED;
+    OPERATE_RET rt = node->intfs.write(node->tdd_handle, cmd, sizeof(cmd));
+    if (rt != OPRT_OK) {
+        tal_free(row_buf);
+        return rt;
     }
 
     for (uint16_t row = 0; row < height; row++) {
