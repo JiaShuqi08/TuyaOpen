@@ -119,6 +119,16 @@ OPERATE_RET tdl_printer_get_dev_info(TDL_PRINTER_HANDLE handle, TDL_PRINTER_DEV_
 OPERATE_RET tdl_printer_paper_feed(TDL_PRINTER_HANDLE handle, uint32_t lines);
 
 /**
+ * @brief Send UTF-8 text to the printer with automatic encoding conversion
+ * @param[in] handle printer handle
+ * @param[in] text UTF-8 encoded text string
+ * @return OPRT_OK on success, OPRT_NOT_SUPPORTED if driver protocol is RAW
+ * @note For GBK drivers (e.g. DP48A), text is converted from UTF-8 to GBK
+ *       internally. For UTF-8 or NONE drivers, text is sent as-is.
+ */
+OPERATE_RET tdl_printer_send_text(TDL_PRINTER_HANDLE handle, const char *text);
+
+/**
  * @brief Close the printer and release resources
  * @param[in] handle printer handle
  * @return OPRT_OK on success

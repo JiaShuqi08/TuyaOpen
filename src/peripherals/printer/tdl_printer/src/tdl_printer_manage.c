@@ -10,6 +10,7 @@
 
 #include "tal_api.h"
 #include "tuya_list.h"
+#include "utf8_to_gbk.h"
 
 /***********************************************************
 ************************macro define************************
@@ -492,4 +493,60 @@ OPERATE_RET tdl_printer_driver_register(char *name, TDD_PRINTER_INTFS_T *intfs,
     tal_mutex_unlock(g_printer_list.mutex);
 
     return rt;
+}
+
+/**
+ * @brief Send UTF-8 text to the printer with automatic encoding conversion
+ */
+OPERATE_RET tdl_printer_send_text(TDL_PRINTER_HANDLE handle, const char *text)
+{
+    TUYA_CHECK_NULL_RETURN(handle, OPRT_INVALID_PARM);
+    TUYA_CHECK_NULL_RETURN(text, OPRT_INVALID_PARM);
+
+    TDL_PRINTER_NODE_T *node = (TDL_PRINTER_NODE_T *)handle;
+
+    if (node->magic != TDL_PRINTER_MAGIC) {
+        PR_ERR("Invalid printer handle magic: %d", node->magic);
+        return OPRT_COM_ERROR;
+    }
+
+    if (node->status != TDL_PRINTER_STATUS_INITED) {
+        PR_ERR("Printer not opened, status: %d, name: %s", node->status, node->name);
+        return OPRT_COM_ERROR;
+    }
+
+    TUYA_CHECK_NULL_RETURN(node->intfs.write, OPRT_INVALID_PARM);
+
+    /* RAW protocol has no font renderer */
+    if (node->dev_info.protocol == TDD_PRINTER_PROTOCOL_RAW) {
+        return OPRT_NOT_SUPPORTED;
+    }
+
+    size_t text_len = strlen(text);
+    if (text_len == 0) {
+        return OPRT_OK;
+    }
+
+    if (node->dev_info.encoding == TDD_PRINTER_ENCODING_GBK) {
+        /* GBK output is always <= UTF-8 input in bytes */
+        uint8_t *gbk_buf = (uint8_t *)tal_malloc(text_len);
+        if (gbk_buf == NULL) {
+            return OPRT_MALLOC_FAILED;
+        }
+
+        int gbk_len = utf8_to_gbk_buf((const uint8_t *)text, text_len,
+                                       gbk_buf, text_len);
+        if (gbk_len < 0) {
+            PR_ERR("UTF-8 to GBK conversion failed: %d", gbk_len);
+            tal_free(gbk_buf);
+            return OPRT_COM_ERROR;
+        }
+
+        OPERATE_RET rt = node->intfs.write(node->tdd_handle, gbk_buf, (uint32_t)gbk_len);
+        tal_free(gbk_buf);
+        return rt;
+    }
+
+    /* UTF-8 or NONE: pass through */
+    return node->intfs.write(node->tdd_handle, (const uint8_t *)text, (uint32_t)text_len);
 }
