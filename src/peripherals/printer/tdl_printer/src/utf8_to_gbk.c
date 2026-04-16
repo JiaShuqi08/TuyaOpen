@@ -10,7 +10,7 @@
 /* -------------------- Built-in UTF-8 → GBK lookup table -------------------- */
 /* Format: Unicode codepoint (3 byte BE) + GBK high + GBK low, sorted by Unicode in ascending order */
 #include "u2g_tbl.inc"   /* See generation script below, each record is 5 bytes */
-#include "string.h"
+#include <string.h>
 
 #define U2G_COUNT  (sizeof(u2g_tbl)/5)  /* Each record: 3 bytes Unicode + 2 bytes GBK */
 

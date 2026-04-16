@@ -140,6 +140,9 @@ OPERATE_RET tdl_printer_send_text(TDL_PRINTER_HANDLE handle, const char *text);
  * @note Images extending beyond the right edge are silently clipped.
  *       If x >= printer_width, the call succeeds without printing anything.
  *       For RAW protocol, dots_per_line must be non-zero.
+ * @note For ESC/POS protocol, a malloc failure after the GS v 0 command header
+ *       has been sent will leave the printer in an undefined state; send an
+ *       ESC @ reset command (0x1B 0x40) to recover.
  */
 OPERATE_RET tdl_printer_send_bitmap(TDL_PRINTER_HANDLE handle,
                                     uint16_t x, uint16_t width,

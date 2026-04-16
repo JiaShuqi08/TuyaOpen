@@ -46,5 +46,4 @@ if (ENABLE_PRINTER)
     config ENABLE_PRINTER_DP48
         bool "enable DP48A ESC/POS UART printer driver"
         default n
-        depends on ENABLE_PRINTER
 endif

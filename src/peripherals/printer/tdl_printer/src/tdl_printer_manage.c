@@ -542,6 +542,11 @@ OPERATE_RET tdl_printer_send_text(TDL_PRINTER_HANDLE handle, const char *text)
             return OPRT_COM_ERROR;
         }
 
+        if (gbk_len == 0) {
+            tal_free(gbk_buf);
+            return OPRT_OK;
+        }
+
         OPERATE_RET rt = node->intfs.write(node->tdd_handle, gbk_buf, (uint32_t)gbk_len);
         tal_free(gbk_buf);
         return rt;
