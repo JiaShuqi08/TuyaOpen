@@ -37,9 +37,17 @@
         "SYSTEM_MSG_VOLUME":"Volume set to",
 
         "VIEW_IMAGE":"View Image",
+        "NO_IMAGE":"No Images",
 
         "TAKE_PHOTO":"Take Photo",
         "ADD_IMAGE":"Add Image",
-        "CANCEL":"Cancel"
+        "PRINT_IMAGE":"Print Image",
+        "CAMERA":"Camera",
+        "ALBUM":"Album",
+        "CANCEL":"Cancel",
+        "ALL_PHOTOS":"All Photos",
+        "SELECT_TEXT":"Select",
+        "DELETE_TEXT":"Delete",
+        "CONFIRM_TEXT":"Confirm"
     }
 }

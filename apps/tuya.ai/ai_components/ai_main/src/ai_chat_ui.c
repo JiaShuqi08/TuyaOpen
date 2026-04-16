@@ -118,14 +118,17 @@ void ai_chat_ui_handle_event(AI_NOTIFY_EVENT_T *event)
 
         ai_ui_disp_msg(AI_UI_DISP_CHAT_MODE, (uint8_t *)name, strlen(name));
     } break;
+
 #if defined(ENABLE_COMP_AI_PICTURE) && (ENABLE_COMP_AI_PICTURE == 1)
     case AI_USER_EVT_ACCEPT_PICTURE: {
-        char *pic_name = (char *)event->data;
-        if (pic_name && strlen(pic_name) > 0) {
-            ai_ui_disp_msg(AI_UI_DISP_PICTURE, (uint8_t *)pic_name, strlen(pic_name));
-        }
+        ai_ui_disp_msg(AI_UI_DISP_AI_IMAGE_LINK, (uint8_t *)(event->data), strlen((char *)(event->data))+1);
+    } break;
+
+    case AI_USER_EVT_SEND_PICTURE_END: {
+        ai_ui_disp_msg(AI_UI_DISP_CLEAR_CHAT_ATTACH, NULL, 0);
     } break;
 #endif
+
     default:
         break;
     }
@@ -138,6 +141,7 @@ OPERATE_RET ai_chat_ui_init(void)
 #if defined(ENABLE_AI_CHAT_CUSTOM_UI) && (ENABLE_AI_CHAT_CUSTOM_UI == 1)
     PR_NOTICE("use custom ai chat ui, need register ui by user");
 #else
+
 #if defined(ENABLE_AI_CHAT_GUI_WECHAT) && (ENABLE_AI_CHAT_GUI_WECHAT == 1)
     TUYA_CALL_ERR_RETURN(ai_ui_chat_wechat_register());
 #elif defined(ENABLE_AI_CHAT_GUI_CHATBOT) && (ENABLE_AI_CHAT_GUI_CHATBOT == 1)

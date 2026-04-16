@@ -37,9 +37,17 @@
         "SYSTEM_MSG_VOLUME":"音量设置为",
 
         "VIEW_IMAGE":"查看图片",
-        
+        "NO_IMAGE":"暂无图片",
+
         "TAKE_PHOTO":"拍照",
         "ADD_IMAGE":"添加图片",
-        "CANCEL":"取消"
+        "PRINT_IMAGE":"打印图片",
+        "CAMERA":"相机",
+        "ALBUM":"相册",
+        "CANCEL":"取消",
+        "ALL_PHOTOS":"所有照片",
+        "SELECT_TEXT":"选择",
+        "DELETE_TEXT":"删除",
+        "CONFIRM_TEXT":"确认"
     }
 }

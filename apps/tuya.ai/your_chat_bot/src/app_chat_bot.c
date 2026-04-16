@@ -38,6 +38,8 @@ static TIMER_ID sg_printf_heap_tm;
 static AI_UI_WIFI_STATUS_E sg_wifi_status = AI_UI_WIFI_STATUS_DISCONNECTED;
 static TIMER_ID            sg_disp_status_tm;
 #endif
+
+extern void app_ui_action_register(void);
 /***********************************************************
 ***********************function define**********************
 ***********************************************************/
@@ -95,13 +97,6 @@ static void __display_status_tm_cb(TIMER_ID timer_id, void *arg)
 
 #endif
 
-#if defined(ENABLE_COMP_AI_VIDEO) && (ENABLE_COMP_AI_VIDEO == 1)
-static void __ai_video_display_flush(TDL_CAMERA_FRAME_T *frame)
-{
-    PR_NOTICE("display");
-}
-#endif
-
 static void __ai_chat_handle_event(AI_NOTIFY_EVENT_T *event)
 {
     (void)event;
@@ -118,12 +113,10 @@ OPERATE_RET app_chat_bot_init(void)
     };
     TUYA_CALL_ERR_RETURN(ai_chat_init(&ai_chat_cfg));
 
-#if defined(ENABLE_COMP_AI_VIDEO) && (ENABLE_COMP_AI_VIDEO == 1)
-    AI_VIDEO_CFG_T ai_video_cfg = {
-        .disp_flush_cb = __ai_video_display_flush,
-    };
+    app_ui_action_register();
 
-    TUYA_CALL_ERR_LOG(ai_video_init(&ai_video_cfg));
+#if defined(ENABLE_COMP_AI_VIDEO) && (ENABLE_COMP_AI_VIDEO == 1)
+    TUYA_CALL_ERR_LOG(ai_video_init());
 #endif
 
 #if defined(ENABLE_COMP_AI_MCP) && (ENABLE_COMP_AI_MCP == 1)
