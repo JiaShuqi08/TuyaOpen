@@ -242,7 +242,7 @@ OPERATE_RET image_album_get_next_item(IMAGE_ALBUM_HANDLE album_handle,
  * @note Locks the album mutex briefly. For a per-backend count matching @ref image_album_get_next_item,
  *       iterate with @ref image_album_get_next_item until @c OPRT_NOT_FOUND (e.g. scan uses this pattern).
  */
-OPERATE_RET image_album_get_committed_count(IMAGE_ALBUM_HANDLE album_handle, UINT32_T *count);
+OPERATE_RET image_album_get_committed_count(IMAGE_ALBUM_HANDLE album_handle, uint32_t *count);
 
 /**
  * @brief Increment album-wide retain count

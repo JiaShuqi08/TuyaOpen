@@ -33,7 +33,7 @@ typedef struct {
     char                    filename[ALBUM_FILENAME_MAX_LEN + 1];
     void                   *path_slot[ALBUM_STORAGE_ENTRY_MAX_COUNT];
     ALBUM_IMAGE_ATTR_T      attr;
-    UINT32_T                use_refcnt;
+    uint32_t                use_refcnt;
     bool_t                  pending_delete;
 } ALBUM_IMAGE_NODE_T;
 
@@ -649,7 +649,7 @@ OPERATE_RET image_album_init(char *name, const IMAGE_ALBUM_INIT_CFG_T *cfg, IMAG
         __album_recover_parse_attrs(album);
         __album_recover_sync_backends(album);
 
-        UINT32_T recovered = 0;
+        uint32_t recovered = 0;
         struct tuya_list_head *pos;
         tuya_list_for_each(pos, &album->image_list) {
             recovered++;
@@ -961,11 +961,11 @@ OPERATE_RET image_album_get_next_item(IMAGE_ALBUM_HANDLE album_handle,
  * @param[out] count Output count
  * @return OPRT_OK or OPRT_INVALID_PARM
  */
-OPERATE_RET image_album_get_committed_count(IMAGE_ALBUM_HANDLE album_handle, UINT32_T *count)
+OPERATE_RET image_album_get_committed_count(IMAGE_ALBUM_HANDLE album_handle, uint32_t *count)
 {
     IMAGE_ALBUM_NODE_T *album;
     struct tuya_list_head *pos;
-    UINT32_T n = 0U;
+    uint32_t n = 0U;
 
     if (album_handle == NULL || count == NULL) {
         return OPRT_INVALID_PARM;

@@ -132,8 +132,8 @@ static OPERATE_RET __scan_build_indices(ALBUM_SCAN_CTX_T *scan)
 static OPERATE_RET __scan_collect(IMAGE_ALBUM_HANDLE album, ALBUM_SCAN_CTX_T *scan)
 {
     OPERATE_RET rt;
-    UINT32_T n;
-    UINT32_T i;
+    uint32_t n;
+    uint32_t i;
     ALBUM_IMAGE_ITEM_T *entries = NULL;
     ALBUM_IMAGE_ITEM_T it;
     char prev[ALBUM_FILENAME_MAX_LEN];
