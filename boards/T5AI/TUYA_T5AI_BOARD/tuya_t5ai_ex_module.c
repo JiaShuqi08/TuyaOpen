@@ -226,14 +226,17 @@ static OPERATE_RET __board_register_camera(void)
 static OPERATE_RET __board_register_printer(void)
 {
 #if defined(PRINTER_NAME)
+    OPERATE_RET rt = OPRT_OK;
     TDD_PRINTER_DP48_CFG_T dp48_cfg = {
         .port_id  = BOARD_PRINTER_UART_PORT,
         .uart_cfg = {
-            .baudrate  = BOARD_PRINTER_UART_BAUDRATE,
-            .databits  = TUYA_UART_DATA_LEN_8BIT,
-            .stopbits  = TUYA_UART_STOP_LEN_1BIT,
-            .parity    = TUYA_UART_PARITY_TYPE_NONE,
-            .flowctrl  = TUYA_UART_FLOWCTRL_NONE,
+            .base_cfg = {
+                .baudrate  = BOARD_PRINTER_UART_BAUDRATE,
+                .databits  = TUYA_UART_DATA_LEN_8BIT,
+                .stopbits  = TUYA_UART_STOP_LEN_1BIT,
+                .parity    = TUYA_UART_PARITY_TYPE_NONE,
+                .flowctrl  = TUYA_UART_FLOWCTRL_NONE,
+            },
         },
     };
 
