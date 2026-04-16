@@ -556,7 +556,7 @@ OPERATE_RET tdl_printer_send_text(TDL_PRINTER_HANDLE handle, const char *text)
  *        at bit x), zero-padding the rest of dst. dst must be zero-filled
  *        before calling.
  */
-static void __bitmap_place_row(uint8_t *dst, uint16_t dst_bytes,
+static void __bitmap_place_row(uint8_t *dst,
                                 const uint8_t *src,
                                 uint16_t x, uint16_t eff_width)
 {
@@ -577,7 +577,6 @@ static void __bitmap_place_row(uint8_t *dst, uint16_t dst_bytes,
             }
         }
     }
-    (void)dst_bytes;
 }
 
 static OPERATE_RET __send_bitmap_escpos(TDL_PRINTER_NODE_T *node,
@@ -606,7 +605,7 @@ static OPERATE_RET __send_bitmap_escpos(TDL_PRINTER_NODE_T *node,
     for (uint16_t row = 0; row < height; row++) {
         const uint8_t *src_row = data + (uint32_t)row * src_bytes_per_row;
         memset(row_buf, 0, total_bytes);
-        __bitmap_place_row(row_buf, total_bytes, src_row, x, eff_width);
+        __bitmap_place_row(row_buf, src_row, x, eff_width);
         OPERATE_RET rt = node->intfs.write(node->tdd_handle, row_buf, total_bytes);
         if (rt != OPRT_OK) {
             tal_free(row_buf);
@@ -634,7 +633,7 @@ static OPERATE_RET __send_bitmap_raw(TDL_PRINTER_NODE_T *node,
     for (uint16_t row = 0; row < height; row++) {
         const uint8_t *src_row = data + (uint32_t)row * src_bytes_per_row;
         memset(row_buf, 0, printer_bytes);
-        __bitmap_place_row(row_buf, printer_bytes, src_row, x, eff_width);
+        __bitmap_place_row(row_buf, src_row, x, eff_width);
         OPERATE_RET rt = node->intfs.write(node->tdd_handle, row_buf, printer_bytes);
         if (rt != OPRT_OK) {
             tal_free(row_buf);
