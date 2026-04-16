@@ -22,6 +22,10 @@
 #include "tdd_camera_gc2145.h"
 #endif
 
+#if defined (TUYA_T5AI_BOARD_EX_MODULE_DP48_PRINTER) && (TUYA_T5AI_BOARD_EX_MODULE_DP48_PRINTER ==1)
+#include "tdd_printer_dp48.h"
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -105,6 +109,11 @@ extern "C" {
 #define BOARD_CAMERA_POWER_PIN       TUYA_GPIO_NUM_MAX
 
 #define BOARD_CAMERA_CLK             24000000
+#endif
+
+#if defined (TUYA_T5AI_BOARD_EX_MODULE_DP48_PRINTER) && (TUYA_T5AI_BOARD_EX_MODULE_DP48_PRINTER ==1)
+#define BOARD_PRINTER_UART_PORT      TUYA_UART_NUM_2
+#define BOARD_PRINTER_UART_BAUDRATE  19200
 #endif
 
 /***********************************************************

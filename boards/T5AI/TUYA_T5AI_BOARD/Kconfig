@@ -51,7 +51,12 @@ choice TUYA_T5AI_BOARD_EX_MODULE
     config TUYA_T5AI_BOARD_EX_MODULE_096_OLED
         bool "0.96 inch 128x64 I2C OLED"
         select ENABLE_DISPLAY
-        select ENABLE_LVGL_OS_FREERTOS if (LVGL_VERSION_9)    
+        select ENABLE_LVGL_OS_FREERTOS if (LVGL_VERSION_9)
+
+    config TUYA_T5AI_BOARD_EX_MODULE_DP48_PRINTER
+        bool "DP-48A ESC/POS thermal printer (UART2, 19200)"
+        select ENABLE_PRINTER
+        select ENABLE_PRINTER_DP48
 endchoice
 
 config ENABLE_EYES_TWO_LCD

@@ -204,13 +204,41 @@ static OPERATE_RET __board_register_camera(void)
         .clk = BOARD_CAMERA_CLK,
     };
 
-    TUYA_CALL_ERR_RETURN(tdd_camera_dvp_gc2145_register(CAMERA_NAME, &camera_cfg)); 
+    TUYA_CALL_ERR_RETURN(tdd_camera_dvp_gc2145_register(CAMERA_NAME, &camera_cfg));
 #endif
 
     return OPRT_OK;
 }
-#else 
+#else
 static OPERATE_RET __board_register_camera(void)
+{
+    return OPRT_OK;
+}
+#endif
+
+
+#if defined (TUYA_T5AI_BOARD_EX_MODULE_DP48_PRINTER) && (TUYA_T5AI_BOARD_EX_MODULE_DP48_PRINTER ==1)
+static OPERATE_RET __board_register_printer(void)
+{
+#if defined(PRINTER_NAME)
+    TDD_PRINTER_DP48_CFG_T dp48_cfg = {
+        .port_id  = BOARD_PRINTER_UART_PORT,
+        .uart_cfg = {
+            .baudrate  = BOARD_PRINTER_UART_BAUDRATE,
+            .databits  = TUYA_UART_DATA_LEN_8BIT,
+            .stopbits  = TUYA_UART_STOP_LEN_1BIT,
+            .parity    = TUYA_UART_PARITY_TYPE_NONE,
+            .flowctrl  = TUYA_UART_FLOWCTRL_NONE,
+        },
+    };
+
+    TUYA_CALL_ERR_RETURN(tdd_printer_dp48_register(PRINTER_NAME, &dp48_cfg));
+#endif
+
+    return OPRT_OK;
+}
+#else
+static OPERATE_RET __board_register_printer(void)
 {
     return OPRT_OK;
 }
@@ -224,6 +252,8 @@ OPERATE_RET board_register_ex_module(void)
     TUYA_CALL_ERR_RETURN(__board_register_display());
 
     TUYA_CALL_ERR_RETURN(__board_register_camera());
+
+    TUYA_CALL_ERR_RETURN(__board_register_printer());
 
     return rt;
 }
