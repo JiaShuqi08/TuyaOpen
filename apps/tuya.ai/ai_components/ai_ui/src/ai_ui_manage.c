@@ -156,6 +156,7 @@ static OPERATE_RET __page_chat_close(void)
     return OPRT_OK;
 }
 
+#if defined(ENABLE_COMP_AI_VIDEO) && (ENABLE_COMP_AI_VIDEO == 1)
 static OPERATE_RET __page_camera_open(void *arg)
 {
     return ai_ui_camera_open();
@@ -165,6 +166,7 @@ static OPERATE_RET __page_camera_close(void)
 {
     return ai_ui_camera_close();
 }
+#endif
 
 #if defined(ENABLE_IMAGE_ALBUM) && (ENABLE_IMAGE_ALBUM == 1)
 static OPERATE_RET __page_album_view_open(void *arg)
