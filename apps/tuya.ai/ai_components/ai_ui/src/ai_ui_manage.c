@@ -14,11 +14,15 @@
 
 #include "ai_ui_icon_font.h"
 #include "ai_ui_stream_text.h"
+
+#if defined(ENABLE_IMAGE_ALBUM) && (ENABLE_IMAGE_ALBUM == 1)
 #include "ai_ui_manage.h"
+#include "image_album.h"
 #include "ai_ui_image_album.h"
+#endif
+
 #include "ai_ui_camera.h"
 #include "ai_ui_page.h"
-#include "image_album.h"
 
 /***********************************************************
 ************************macro define************************
@@ -105,6 +109,7 @@ static OPERATE_RET __ai_ui_action_manage_init(void)
     return OPRT_OK;
 }
 
+#if defined(ENABLE_IMAGE_ALBUM) && (ENABLE_IMAGE_ALBUM == 1)
 /**
  * @brief Callback invoked when user taps an image link in the chat.
  *        Loads the full image from album by name and displays it.
@@ -126,7 +131,9 @@ static void __image_link_view_cb(void *arg)
     if (img.data) {
         image_album_free_file_data(img.data);
     }
+
 }
+#endif
 
 /***********************************************************
 *******************page callback wrappers*******************
@@ -159,6 +166,7 @@ static OPERATE_RET __page_camera_close(void)
     return ai_ui_camera_close();
 }
 
+#if defined(ENABLE_IMAGE_ALBUM) && (ENABLE_IMAGE_ALBUM == 1)
 static OPERATE_RET __page_album_view_open(void *arg)
 {
     ai_ui_image_album_open();
@@ -196,6 +204,7 @@ static OPERATE_RET __page_album_select_close(void)
     ai_ui_image_album_select_close();
     return OPRT_OK;
 }
+#endif
 
 static void __page_register_all(void)
 {
@@ -207,12 +216,16 @@ static void __page_register_all(void)
     intfs.close  = __page_chat_close;
     ai_ui_page_register(AI_UI_PAGE_CHAT, &intfs);
 
+#if defined(ENABLE_COMP_AI_VIDEO) && (ENABLE_COMP_AI_VIDEO == 1)
     /* Camera */
     memset(&intfs, 0, sizeof(intfs));
     intfs.open  = __page_camera_open;
     intfs.close = __page_camera_close;
     ai_ui_page_register(AI_UI_PAGE_CAMERA, &intfs);
+#endif
 
+
+#if defined(ENABLE_IMAGE_ALBUM) && (ENABLE_IMAGE_ALBUM == 1)
     /* Album view (single image) — no page-specific close */
     memset(&intfs, 0, sizeof(intfs));
     intfs.open  = __page_album_view_open;
@@ -230,6 +243,7 @@ static void __page_register_all(void)
     intfs.open  = __page_album_select_open;
     intfs.close = __page_album_select_close;
     ai_ui_page_register(AI_UI_PAGE_ALBUM_SELECT, &intfs);
+#endif
 }
 
 /**
@@ -338,6 +352,7 @@ static void __ui_disp_msg_handle(AI_UI_MSG_T *msg_data)
         }
         break;
 
+#if defined(ENABLE_COMP_AI_VIDEO) && (ENABLE_COMP_AI_VIDEO == 1)
         case AI_UI_DISP_CAMERA_OPEN: {
             ai_ui_page_open(AI_UI_PAGE_CAMERA, NULL);
         }
@@ -354,7 +369,9 @@ static void __ui_disp_msg_handle(AI_UI_MSG_T *msg_data)
             ai_ui_page_close();
         }
         break;
+#endif
 
+#if defined(ENABLE_IMAGE_ALBUM) && (ENABLE_IMAGE_ALBUM == 1)
         case AI_UI_DISP_USER_IMAGE_LINK: {
             if (sg_chat_intfs.disp_link && msg_data->data) {
                 sg_chat_intfs.disp_link(FALSE, VIEW_IMAGE, __image_link_view_cb,
@@ -416,7 +433,7 @@ static void __ui_disp_msg_handle(AI_UI_MSG_T *msg_data)
             ai_ui_image_album_close();
             ai_ui_page_close();
             break;
-
+#endif
         default:
             if (sg_ui_intfs.disp_other_msg) {
                 sg_ui_intfs.disp_other_msg(msg_data->type, (uint8_t *)msg_data->data, msg_data->len);

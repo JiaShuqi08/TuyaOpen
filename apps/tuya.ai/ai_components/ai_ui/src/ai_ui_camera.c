@@ -5,11 +5,15 @@
  * @copyright Copyright (c) 2021-2026 Tuya Inc. All Rights Reserved.
  */
 
-#include "tuya_cloud_types.h"
 #include "tal_api.h"
+
+#if defined(ENABLE_COMP_AI_VIDEO) && (ENABLE_COMP_AI_VIDEO ==1)
 #include "ai_ui_camera.h"
 
+#if defined(ENABLE_IMAGE_ALBUM) && (ENABLE_IMAGE_ALBUM ==1)
 #include "ai_ui_image_album.h"
+#endif
+
 /***********************************************************
 ************************macro define************************
 ***********************************************************/
@@ -45,6 +49,7 @@ OPERATE_RET ai_ui_camera_open(void)
     }
 
 
+#if defined(ENABLE_IMAGE_ALBUM) && (ENABLE_IMAGE_ALBUM ==1)
     AI_UI_IMG_T img = {0};
     img.data = NULL;
     OPERATE_RET rt = ai_ui_image_album_get_latest_img(&img);
@@ -59,6 +64,7 @@ OPERATE_RET ai_ui_camera_open(void)
     }
 
     ai_ui_image_album_free_img(&img);
+#endif
 
     return OPRT_OK;
 }
@@ -97,3 +103,4 @@ OPERATE_RET ai_ui_camera_close(void)
 
     return OPRT_OK;
 }
+#endif

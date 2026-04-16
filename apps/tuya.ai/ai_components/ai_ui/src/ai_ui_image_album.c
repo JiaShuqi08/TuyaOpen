@@ -5,9 +5,9 @@
  * @version 0.1
  * @copyright Copyright (c) 2021-2026 Tuya Inc. All Rights Reserved.
  */
-
-#include "tuya_cloud_types.h"
 #include "tal_api.h"
+
+#if defined(ENABLE_IMAGE_ALBUM) && (ENABLE_IMAGE_ALBUM == 1)
 #include "image_album.h"
 #include "image_album_scan.h"
 #include "image_album_thumb.h"
@@ -22,6 +22,12 @@
 #define AI_UI_ALBUM_STORAGE_TP   IMAGE_ALBUM_STORAGE_TP_SD
 #else
 #define AI_UI_ALBUM_STORAGE_TP   IMAGE_ALBUM_STORAGE_TP_CUSTOM
+#endif
+
+#if defined(COMP_AI_PICTURE_ALBUM_NAME)
+#define AI_UI_IMAG_ALBUUM_NAME COMP_AI_PICTURE_ALBUM_NAME
+#else 
+#define AI_UI_IMAG_ALBUUM_NAME "ai_image_album"
 #endif
 
 #define AI_UI_ALBUM_THUMB_W      80
@@ -69,9 +75,9 @@ static void __ensure_album_ctx(void)
     if (sg_ctx.album_name[0] != '\0' && sg_ctx.album_hdl != NULL) {
         return;
     }
-    sg_ctx.album_hdl = image_album_find_by_name(COMP_AI_PICTURE_ALBUM_NAME);
+    sg_ctx.album_hdl = image_album_find_by_name(AI_UI_IMAG_ALBUUM_NAME);
     if (sg_ctx.album_hdl != NULL) {
-        strncpy(sg_ctx.album_name, COMP_AI_PICTURE_ALBUM_NAME, ALBUM_NAME_MAX_LEN);
+        strncpy(sg_ctx.album_name, AI_UI_IMAG_ALBUUM_NAME, ALBUM_NAME_MAX_LEN);
         sg_ctx.album_name[ALBUM_NAME_MAX_LEN] = '\0';
     }
 }
@@ -231,9 +237,9 @@ void ai_ui_image_album_open(void)
         sg_ctx.img_count = 0;
     }
 
-    sg_ctx.album_hdl = image_album_find_by_name(COMP_AI_PICTURE_ALBUM_NAME);
+    sg_ctx.album_hdl = image_album_find_by_name(AI_UI_IMAG_ALBUUM_NAME);
     if (sg_ctx.album_hdl == NULL) {
-        PR_WARN("album not found: %s", COMP_AI_PICTURE_ALBUM_NAME);
+        PR_WARN("album not found: %s", AI_UI_IMAG_ALBUUM_NAME);
         /* Still open the page to show empty state */
         if (sg_album_intfs.disp_open) {
             sg_album_intfs.disp_open();
@@ -241,7 +247,7 @@ void ai_ui_image_album_open(void)
         return;
     }
 
-    strncpy(sg_ctx.album_name, COMP_AI_PICTURE_ALBUM_NAME, ALBUM_NAME_MAX_LEN);
+    strncpy(sg_ctx.album_name, AI_UI_IMAG_ALBUUM_NAME, ALBUM_NAME_MAX_LEN);
     sg_ctx.album_name[ALBUM_NAME_MAX_LEN] = '\0';
 
     rt = image_album_scan_init(sg_ctx.album_name,
@@ -404,7 +410,7 @@ void ai_ui_image_album_get_img(char *name, AI_UI_IMG_T *img)
     IMAGE_ALBUM_HANDLE album_hdl = __get_album_hdl();
     if (album_hdl == NULL) {
         /* sg_ctx may have been cleared by a prior close — look it up directly */
-        album_hdl = image_album_find_by_name(COMP_AI_PICTURE_ALBUM_NAME);
+        album_hdl = image_album_find_by_name(AI_UI_IMAG_ALBUUM_NAME);
         if (album_hdl == NULL) {
             PR_ERR("album not found");
             return;
@@ -454,15 +460,15 @@ OPERATE_RET ai_ui_image_album_get_latest_img(AI_UI_IMG_T *img)
 
     IMAGE_ALBUM_HANDLE album_hdl = __get_album_hdl();
     if (album_hdl == NULL) {
-        album_hdl = image_album_find_by_name(COMP_AI_PICTURE_ALBUM_NAME);
+        album_hdl = image_album_find_by_name(AI_UI_IMAG_ALBUUM_NAME);
         if (album_hdl == NULL) {
-            PR_ERR("album not found: %s", COMP_AI_PICTURE_ALBUM_NAME);
+            PR_ERR("album not found: %s", AI_UI_IMAG_ALBUUM_NAME);
             return OPRT_NOT_FOUND;
         }
     }
 
     IMAGE_ALBUM_SCAN_HANDLE scan_hdl = NULL;
-    OPERATE_RET rt = image_album_scan_init(COMP_AI_PICTURE_ALBUM_NAME,
+    OPERATE_RET rt = image_album_scan_init(AI_UI_IMAG_ALBUUM_NAME,
                                            AI_UI_ALBUM_STORAGE_TP,
                                            &scan_hdl);
     if (rt != OPRT_OK) {
@@ -568,3 +574,5 @@ void ai_ui_image_album_close(void)
         sg_album_intfs.disp_close();
     }
 }
+
+#endif
