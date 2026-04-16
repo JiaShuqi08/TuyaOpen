@@ -16,6 +16,13 @@
 #include "font_awesome_symbols.h"
 #include "ai_ui_wechat_common.h"
 #include "tal_image.h"
+#if defined(ENABLE_IMAGE_ALBUM) && (ENABLE_IMAGE_ALBUM == 1)
+#include "image_album.h"
+#endif
+
+#ifndef ALBUM_FILENAME_MAX_LEN
+#define ALBUM_FILENAME_MAX_LEN  64
+#endif
 
 LV_IMG_DECLARE(icon_ai_icon);
 #if defined(ENABLE_COMP_AI_VIDEO) && (ENABLE_COMP_AI_VIDEO == 1)
@@ -62,6 +69,12 @@ typedef struct {
 
     lv_obj_t *plus_btn;
     lv_obj_t *popup_menu;
+
+    char      cur_img_name[ALBUM_FILENAME_MAX_LEN + 1];
+
+    lv_obj_t *picture_action_bar;
+    lv_obj_t *picture_print_btn;
+    lv_obj_t *picture_attach_btn;
 } AI_UI_WECHAT_CHAT_T;
 
 
@@ -200,6 +213,33 @@ static lv_obj_t *__create_user_msg_label(lv_obj_t *parent, char *text)
 }
 
 /* ── picture view event callbacks ── */
+
+#if defined(ENABLE_PRINTER) && (ENABLE_PRINTER == 1)
+static void __picture_print_btn_cb(lv_event_t *e)
+{
+    (void)e;
+    if (sg_chat.cur_img_name[0] == '\0') {
+        return;
+    }
+    ai_ui_notify_action(AI_UI_ACT_PRINT_IMG,
+                        (uint8_t *)sg_chat.cur_img_name,
+                        (uint32_t)strlen(sg_chat.cur_img_name));
+}
+#endif
+
+#if defined(ENABLE_IMAGE_ALBUM) && (ENABLE_IMAGE_ALBUM == 1)
+static void __picture_attach_btn_cb(lv_event_t *e)
+{
+    (void)e;
+    if (sg_chat.cur_img_name[0] == '\0') {
+        return;
+    }
+    ai_ui_notify_action(AI_UI_ACT_ADD_IMG_ATTACH,
+                        (uint8_t *)sg_chat.cur_img_name,
+                        (uint32_t)strlen(sg_chat.cur_img_name));
+}
+#endif
+
 /**
  * @brief Click picture canvas — hide picture view, show chat content.
  */
@@ -208,6 +248,7 @@ static void __return_chat_content_event_cb(lv_event_t *e)
     lv_obj_add_flag(sg_chat.picture, LV_OBJ_FLAG_HIDDEN);
     lv_obj_clear_flag(sg_chat.content, LV_OBJ_FLAG_HIDDEN);
     lv_obj_clear_flag(sg_chat.plus_btn, LV_OBJ_FLAG_HIDDEN);
+    sg_chat.cur_img_name[0] = '\0';
 }
 
 /**
@@ -467,10 +508,20 @@ static void __ui_set_ai_msg_stream_end(void)
  * @param jpeg Pointer to JPEG data.
  * @param len  Length of JPEG data.
  */
-static void __ui_disp_image(uint8_t *jpeg, uint32_t len)
+static void __ui_disp_image(AI_UI_IMG_T *img)
 {
-    if (jpeg == NULL || len == 0) {
+    if (img == NULL || img->data == NULL || img->len == 0) {
         return;
+    }
+    uint8_t  *jpeg = img->data;
+    uint32_t  len  = img->len;
+
+    /* Store album filename so the action buttons can reference it */
+    if (img->name != NULL) {
+        strncpy(sg_chat.cur_img_name, img->name, ALBUM_FILENAME_MAX_LEN);
+        sg_chat.cur_img_name[ALBUM_FILENAME_MAX_LEN] = '\0';
+    } else {
+        sg_chat.cur_img_name[0] = '\0';
     }
 
     TAL_IMAGE_JPEG_INFO_T info = {0};
@@ -789,6 +840,61 @@ void ai_ui_wechat_chat_init(lv_obj_t *parent)
     lv_obj_set_style_radius(sg_chat.picture, 0, 0);
     lv_obj_align(sg_chat.picture, LV_ALIGN_CENTER, 0, 0);
     lv_obj_add_flag(sg_chat.picture, LV_OBJ_FLAG_HIDDEN);
+
+    /* Floating action pill — right-center of picture view, child of picture */
+    {
+        const lv_font_t *icon_font = ai_ui_get_icon_font();
+
+        sg_chat.picture_action_bar = lv_obj_create(sg_chat.picture);
+        lv_obj_set_size(sg_chat.picture_action_bar, 36, 80);
+        lv_obj_align(sg_chat.picture_action_bar, LV_ALIGN_RIGHT_MID, -10, 0);
+        lv_obj_set_style_bg_color(sg_chat.picture_action_bar, lv_color_black(), 0);
+        lv_obj_set_style_bg_opa(sg_chat.picture_action_bar, 140, 0); /* ~55 % opaque */
+        lv_obj_set_style_radius(sg_chat.picture_action_bar, 18, 0);
+        lv_obj_set_style_border_width(sg_chat.picture_action_bar, 0, 0);
+        lv_obj_set_style_pad_all(sg_chat.picture_action_bar, 0, 0);
+        lv_obj_clear_flag(sg_chat.picture_action_bar, LV_OBJ_FLAG_SCROLLABLE);
+
+#if defined(ENABLE_PRINTER) && (ENABLE_PRINTER == 1)
+        sg_chat.picture_print_btn = lv_obj_create(sg_chat.picture_action_bar);
+        lv_obj_set_size(sg_chat.picture_print_btn, 36, 36);
+        lv_obj_align(sg_chat.picture_print_btn, LV_ALIGN_TOP_MID, 0, 0);
+        lv_obj_set_style_bg_opa(sg_chat.picture_print_btn, LV_OPA_TRANSP, 0);
+        lv_obj_set_style_border_width(sg_chat.picture_print_btn, 0, 0);
+        lv_obj_set_style_pad_all(sg_chat.picture_print_btn, 0, 0);
+        lv_obj_set_style_radius(sg_chat.picture_print_btn, 0, 0);
+        lv_obj_clear_flag(sg_chat.picture_print_btn, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_add_flag(sg_chat.picture_print_btn, LV_OBJ_FLAG_CLICKABLE);
+
+        lv_obj_t *print_icon = lv_label_create(sg_chat.picture_print_btn);
+        lv_obj_set_style_text_font(print_icon, icon_font, 0);
+        lv_obj_set_style_text_color(print_icon, lv_color_white(), 0);
+        lv_label_set_text(print_icon, FONT_AWESOME_PRINT);
+        lv_obj_center(print_icon);
+
+        lv_obj_add_event_cb(sg_chat.picture_print_btn, __picture_print_btn_cb, LV_EVENT_CLICKED, NULL);
+#endif /* ENABLE_PRINTER */
+
+#if defined(ENABLE_IMAGE_ALBUM) && (ENABLE_IMAGE_ALBUM == 1)
+        sg_chat.picture_attach_btn = lv_obj_create(sg_chat.picture_action_bar);
+        lv_obj_set_size(sg_chat.picture_attach_btn, 36, 36);
+        lv_obj_align(sg_chat.picture_attach_btn, LV_ALIGN_BOTTOM_MID, 0, 0);
+        lv_obj_set_style_bg_opa(sg_chat.picture_attach_btn, LV_OPA_TRANSP, 0);
+        lv_obj_set_style_border_width(sg_chat.picture_attach_btn, 0, 0);
+        lv_obj_set_style_pad_all(sg_chat.picture_attach_btn, 0, 0);
+        lv_obj_set_style_radius(sg_chat.picture_attach_btn, 0, 0);
+        lv_obj_clear_flag(sg_chat.picture_attach_btn, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_add_flag(sg_chat.picture_attach_btn, LV_OBJ_FLAG_CLICKABLE);
+
+        lv_obj_t *attach_icon = lv_label_create(sg_chat.picture_attach_btn);
+        lv_obj_set_style_text_font(attach_icon, icon_font, 0);
+        lv_obj_set_style_text_color(attach_icon, lv_color_white(), 0);
+        lv_label_set_text(attach_icon, FONT_AWESOME_IMAGE);
+        lv_obj_center(attach_icon);
+
+        lv_obj_add_event_cb(sg_chat.picture_attach_btn, __picture_attach_btn_cb, LV_EVENT_CLICKED, NULL);
+#endif /* ENABLE_IMAGE_ALBUM */
+    }
 
     /* Attach bar — horizontal row of thumbnails at bottom, hidden by default */
     sg_chat.attach_bar = lv_obj_create(parent);

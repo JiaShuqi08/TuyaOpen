@@ -126,7 +126,7 @@ static void __image_link_view_cb(void *arg)
     AI_UI_IMG_T img = {0};
     ai_ui_image_album_get_img(name, &img);
     if (sg_chat_intfs.disp_image && img.data) {
-        sg_chat_intfs.disp_image(img.data, img.len);
+        sg_chat_intfs.disp_image(&img);
     }
     if (img.data) {
         image_album_free_file_data(img.data);

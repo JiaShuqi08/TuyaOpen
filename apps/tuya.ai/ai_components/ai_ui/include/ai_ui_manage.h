@@ -148,7 +148,7 @@ typedef struct {
     void (*disp_ai_msg_stream_data)(char *string);
     void (*disp_ai_msg_stream_end)(void);
     void (*disp_system_msg)(char *string);
-    void (*disp_image)(uint8_t *jpeg, uint32_t len);
+    void (*disp_image)(AI_UI_IMG_T *img);
     void (*disp_link)(bool is_ai, char *text, AI_UI_CHAT_LINK_CB cb, void *cb_arg, uint32_t len);
     void (*disp_add_chat_attch_img)(AI_UI_IMG_T *img);
     void (*disp_clear_chat_attach)(void);
