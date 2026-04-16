@@ -27,7 +27,12 @@ static OPERATE_RET __tdd_printer_dp48_open(TDD_PRINTER_HANDLE_T handle)
 
     TDD_PRINTER_DP48_HANDLE_T *hdl = (TDD_PRINTER_DP48_HANDLE_T *)handle;
 
-    OPERATE_RET rt = tal_uart_init(hdl->cfg.port_id, &hdl->cfg.uart_cfg);
+    OPERATE_RET rt = tal_uart_deinit(hdl->cfg.port_id);
+    if (rt != OPRT_OK) {
+        PR_DEBUG("DP48 pre-open deinit(port %d): rt=%d", hdl->cfg.port_id, rt);
+    }
+
+    rt = tal_uart_init(hdl->cfg.port_id, &hdl->cfg.uart_cfg);
     if (rt != OPRT_OK) {
         PR_ERR("DP48 UART init failed: %d", rt);
     }
@@ -65,6 +70,24 @@ static OPERATE_RET __tdd_printer_dp48_close(TDD_PRINTER_HANDLE_T handle)
     return tal_uart_deinit(hdl->cfg.port_id);
 }
 
+static OPERATE_RET __tdd_printer_dp48_paper_feed(TDD_PRINTER_HANDLE_T handle, uint32_t lines)
+{
+    TUYA_CHECK_NULL_RETURN(handle, OPRT_INVALID_PARM);
+
+    if (lines == 0) {
+        return OPRT_OK;
+    }
+
+    TDD_PRINTER_DP48_HANDLE_T *hdl = (TDD_PRINTER_DP48_HANDLE_T *)handle;
+
+    /* ESC d n — feed n lines */
+    uint8_t n = (lines > 255u) ? 255u : (uint8_t)lines;
+    uint8_t cmd[] = {0x1B, 0x64, n};
+
+    int ret = tal_uart_write(hdl->cfg.port_id, cmd, sizeof(cmd));
+    return (ret == (int)sizeof(cmd)) ? OPRT_OK : OPRT_COM_ERROR;
+}
+
 OPERATE_RET tdd_printer_dp48_register(char *name, TDD_PRINTER_DP48_CFG_T *cfg)
 {
     TUYA_CHECK_NULL_RETURN(name, OPRT_INVALID_PARM);
@@ -76,10 +99,16 @@ OPERATE_RET tdd_printer_dp48_register(char *name, TDD_PRINTER_DP48_CFG_T *cfg)
     memset(hdl, 0, sizeof(TDD_PRINTER_DP48_HANDLE_T));
     memcpy(&hdl->cfg, cfg, sizeof(TDD_PRINTER_DP48_CFG_T));
 
+    /* TAL requires a non-zero rx ring buffer even for TX-only devices */
+    if (hdl->cfg.uart_cfg.rx_buffer_size == 0) {
+        hdl->cfg.uart_cfg.rx_buffer_size = 64;
+    }
+
     TDD_PRINTER_INTFS_T dp48_intfs = {
-        .open  = __tdd_printer_dp48_open,
-        .write = __tdd_printer_dp48_write,
-        .close = __tdd_printer_dp48_close,
+        .open        = __tdd_printer_dp48_open,
+        .write       = __tdd_printer_dp48_write,
+        .close       = __tdd_printer_dp48_close,
+        .paper_feed  = __tdd_printer_dp48_paper_feed,
     };
 
     TDD_PRINTER_DEV_INFO_T dev_info = {
