@@ -50,16 +50,19 @@ typedef enum {
     AI_UI_DISP_NETWORK,
     AI_UI_DISP_CHAT_MODE,
 
+#if defined(ENABLE_COMP_AI_VIDEO) && (ENABLE_COMP_AI_VIDEO == 1)
     AI_UI_DISP_CAMERA_OPEN,
     AI_UI_DISP_CAMERA_FLUSH,
     AI_UI_DISP_CAMERA_THUMB,
     AI_UI_DISP_CAMERA_CLOSE,
+#endif
 
     AI_UI_DISP_USER_IMAGE_LINK,
     AI_UI_DISP_AI_IMAGE_LINK,
     AI_UI_DISP_ADD_CHAT_ATTACH_IMG,
     AI_UI_DISP_CLEAR_CHAT_ATTACH,
 
+#if defined(ENABLE_IMAGE_ALBUM) && (ENABLE_IMAGE_ALBUM == 1)
     AI_UI_DISP_ALBUM_OPEN,
     AI_UI_DISP_ALBUM_VIEW_NEXT,
     AI_UI_DISP_ALBUM_VIEW_PREV,
@@ -67,6 +70,7 @@ typedef enum {
     AI_UI_DISP_ALBUM_SELECT_IMG,
     AI_UI_DISP_ALBUM_RELOAD,
     AI_UI_DISP_ALBUM_CLOSE,
+#endif
 
 #if defined(ENABLE_PRINTER) && (ENABLE_PRINTER == 1)
     AI_UI_DISP_PRINTER_OPEN,
@@ -77,9 +81,14 @@ typedef enum {
 }AI_UI_DISP_TYPE_E;
 
 typedef enum {
-    AI_UI_ACT_OPEN_CAMERA,   
-    AI_UI_ACT_TAKE_PHOTO, 
-    AI_UI_ACT_CLOSE_CAMER, 
+#if defined(ENABLE_COMP_AI_VIDEO) && (ENABLE_COMP_AI_VIDEO == 1)
+    AI_UI_ACT_OPEN_CAMERA,
+    AI_UI_ACT_TAKE_PHOTO,
+    AI_UI_ACT_CLOSE_CAMER,
+    AI_UI_ACT_CAMERA_AI_ON,
+    AI_UI_ACT_CAMERA_AI_OFF,
+#endif
+#if defined(ENABLE_IMAGE_ALBUM) && (ENABLE_IMAGE_ALBUM == 1)
     AI_UI_ACT_OPEN_ALBUM,
     AI_UI_ACT_VIEW_PREV_IMG,
     AI_UI_ACT_VIEW_NEXT_IMG,
@@ -90,8 +99,7 @@ typedef enum {
     AI_UI_ACT_OPEN_IMG_ATTACH_LIST,
     AI_UI_ACT_ADD_IMG_ATTACH,
     AI_UI_ACT_DEL_IMG_ATTACH,
-    AI_UI_ACT_CAMERA_AI_ON,
-    AI_UI_ACT_CAMERA_AI_OFF,
+#endif
 #if defined(ENABLE_PRINTER) && (ENABLE_PRINTER == 1)
     AI_UI_ACT_OPEN_PRINTER,
     AI_UI_ACT_PRINT_IMG,
@@ -100,6 +108,7 @@ typedef enum {
     AI_UI_ACT_MAX
 } AI_UI_ACTION_E;
 
+#if defined(ENABLE_IMAGE_ALBUM) && (ENABLE_IMAGE_ALBUM == 1)
 #define AI_UI_BATCH_DELETE_NAME_LEN  64   /* matches ALBUM_FILENAME_MAX_LEN */
 #define AI_UI_BATCH_DELETE_MAX       8
 
@@ -107,22 +116,26 @@ typedef struct {
     uint32_t count;
     char     names[AI_UI_BATCH_DELETE_MAX][AI_UI_BATCH_DELETE_NAME_LEN + 1];
 } AI_UI_BATCH_DELETE_T;
+#endif
 
 typedef struct {
-    char    *name; 
+    char    *name;
     uint16_t width;
     uint16_t height;
     uint8_t *data;
     uint32_t len;
 } AI_UI_IMG_T;
 
+#if defined(ENABLE_COMP_AI_VIDEO) && (ENABLE_COMP_AI_VIDEO == 1)
 typedef struct {
     uint16_t width;
     uint16_t height;
     uint8_t *yuv422;
     uint32_t len;
 } AI_UI_VIDEO_T;
+#endif
 
+#if defined(ENABLE_IMAGE_ALBUM) && (ENABLE_IMAGE_ALBUM == 1)
 typedef struct {
     void (*disp_open)(void);
     void (*disp_image)(AI_UI_IMG_T *img);
@@ -130,13 +143,16 @@ typedef struct {
     void (*disp_select_img_thumb_list)(AI_UI_IMG_T *item_arr, uint32_t arr_cnt, uint8_t select_num_max);
     void (*disp_close)(void);
 } AI_UI_ALBUM_INTFS_T;
+#endif
 
+#if defined(ENABLE_COMP_AI_VIDEO) && (ENABLE_COMP_AI_VIDEO == 1)
 typedef struct {
     void (*disp_open)(void);
     void (*disp_yuv_flush)(AI_UI_VIDEO_T *video);
     void (*disp_set_thumbnail_jpeg)(uint8_t *jpeg, uint32_t len);
     void (*disp_close)(void);
 } AI_UI_CAMERA_INTFS_T;
+#endif
 
 typedef void (*AI_UI_CHAT_LINK_CB)(void *arg);
 
@@ -180,11 +196,13 @@ OPERATE_RET ai_ui_register(AI_UI_INTFS_T *intfs);
 
 OPERATE_RET ai_ui_chat_register(AI_UI_CHAT_INTFS_T *intfs);
 
-
+#if defined(ENABLE_IMAGE_ALBUM) && (ENABLE_IMAGE_ALBUM == 1)
 OPERATE_RET ai_ui_image_album_register(AI_UI_ALBUM_INTFS_T *intfs);
+#endif
 
-
+#if defined(ENABLE_COMP_AI_VIDEO) && (ENABLE_COMP_AI_VIDEO == 1)
 OPERATE_RET ai_ui_camera_register(AI_UI_CAMERA_INTFS_T *intfs);
+#endif
 
 /**
  * @brief Initialize AI UI module.
