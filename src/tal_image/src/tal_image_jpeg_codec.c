@@ -57,6 +57,20 @@ typedef struct {
 static tjpgd_out_ctx_t s_out_ctx;
 #endif
 
+/* Nearest-neighbor scale of an 8-bit grayscale image */
+static void __gray_scale_nn(const uint8_t *src, uint16_t sw, uint16_t sh,
+                             uint8_t *dst, uint16_t dw, uint16_t dh)
+{
+    uint16_t dy, dx;
+    for (dy = 0; dy < dh; dy++) {
+        uint16_t sy = (uint16_t)((uint32_t)dy * sh / dh);
+        for (dx = 0; dx < dw; dx++) {
+            uint16_t sx = (uint16_t)((uint32_t)dx * sw / dw);
+            dst[(uint32_t)dy * dw + dx] = src[(uint32_t)sy * sw + sx];
+        }
+    }
+}
+
 /***********************************************************
 *********************static functions***********************
 ***********************************************************/
@@ -462,15 +476,37 @@ OPERATE_RET tal_image_jpeg_decode_gray(const uint8_t *jpeg_data,
             tjDestroy(handle);
             return OPRT_COM_ERROR;
         }
-        if (w <= 0 || h <= 0 || (unsigned int)w != out->out_width || (unsigned int)h != out->out_height) {
+        if (w <= 0 || h <= 0 ||
+            out->out_width  == 0 || out->out_width  > (unsigned int)w ||
+            out->out_height == 0 || out->out_height > (unsigned int)h) {
             tjDestroy(handle);
             return OPRT_INVALID_PARM;
         }
-        ret = tjDecompress2(handle, jpeg_data, (unsigned long)jpeg_size,
-                           out->out_buf, w, 0, h, TJPF_GRAY, 0);
-        tjDestroy(handle);
-        if (ret != 0) {
-            return OPRT_COM_ERROR;
+        if ((unsigned int)w == out->out_width && (unsigned int)h == out->out_height) {
+            ret = tjDecompress2(handle, jpeg_data, (unsigned long)jpeg_size,
+                               out->out_buf, w, 0, h, TJPF_GRAY, 0);
+            tjDestroy(handle);
+            if (ret != 0) {
+                return OPRT_COM_ERROR;
+            }
+        } else {
+            /* Decode to full gray, then scale down */
+            uint32_t full_size = (uint32_t)w * (uint32_t)h;
+            uint8_t *tmp = (uint8_t *)Malloc(full_size);
+            if (tmp == NULL) {
+                tjDestroy(handle);
+                return OPRT_MALLOC_FAILED;
+            }
+            ret = tjDecompress2(handle, jpeg_data, (unsigned long)jpeg_size,
+                               tmp, w, 0, h, TJPF_GRAY, 0);
+            tjDestroy(handle);
+            if (ret != 0) {
+                Free(tmp);
+                return OPRT_COM_ERROR;
+            }
+            __gray_scale_nn(tmp, (uint16_t)w, (uint16_t)h,
+                            out->out_buf, out->out_width, out->out_height);
+            Free(tmp);
         }
     }
 #else
@@ -494,17 +530,54 @@ OPERATE_RET tal_image_jpeg_decode_gray(const uint8_t *jpeg_data,
             Free(workbuf);
             return OPRT_COM_ERROR;
         }
-        if (jd.width != out->out_width || jd.height != out->out_height) {
+        if (out->out_width  == 0 || out->out_width  > jd.width ||
+            out->out_height == 0 || out->out_height > jd.height) {
             Free(workbuf);
             return OPRT_INVALID_PARM;
         }
-        s_out_ctx.out_buf    = out->out_buf;
-        s_out_ctx.out_width  = out->out_width;
-        s_out_ctx.out_height = out->out_height;
-        rc                   = jd_decomp(&jd, tjpgd_outfunc_gray, 0);
-        Free(workbuf);
-        if (rc != JDR_OK) {
-            return OPRT_COM_ERROR;
+
+        /* Find the largest power-of-2 downscale where decoded size >= target */
+        uint8_t  scale = 0;
+        uint16_t dec_w = jd.width;
+        uint16_t dec_h = jd.height;
+        while (scale < 3 &&
+               (dec_w >> 1u) >= out->out_width &&
+               (dec_h >> 1u) >= out->out_height) {
+            scale++;
+            dec_w = (uint16_t)(dec_w >> 1u);
+            dec_h = (uint16_t)(dec_h >> 1u);
+        }
+
+        if (dec_w == out->out_width && dec_h == out->out_height) {
+            /* Exact match at this scale — decode directly into output */
+            s_out_ctx.out_buf    = out->out_buf;
+            s_out_ctx.out_width  = out->out_width;
+            s_out_ctx.out_height = out->out_height;
+            rc = jd_decomp(&jd, tjpgd_outfunc_gray, scale);
+            Free(workbuf);
+            if (rc != JDR_OK) {
+                return OPRT_COM_ERROR;
+            }
+        } else {
+            /* Decode to power-of-2 size, then nearest-neighbor scale to target */
+            uint32_t tmp_size = (uint32_t)dec_w * dec_h;
+            uint8_t *tmp = (uint8_t *)Malloc(tmp_size);
+            if (tmp == NULL) {
+                Free(workbuf);
+                return OPRT_MALLOC_FAILED;
+            }
+            s_out_ctx.out_buf    = tmp;
+            s_out_ctx.out_width  = dec_w;
+            s_out_ctx.out_height = dec_h;
+            rc = jd_decomp(&jd, tjpgd_outfunc_gray, scale);
+            Free(workbuf);
+            if (rc != JDR_OK) {
+                Free(tmp);
+                return OPRT_COM_ERROR;
+            }
+            __gray_scale_nn(tmp, dec_w, dec_h,
+                            out->out_buf, out->out_width, out->out_height);
+            Free(tmp);
         }
     }
 #endif
