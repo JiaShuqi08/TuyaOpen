@@ -27,8 +27,8 @@ extern "C" {
 ***********************typedef define***********************
 ***********************************************************/
 typedef struct {
-    AI_PICTURE_INFO_T pic;
-    char             *text;
+    ALBUM_IMAGE_ITEM_T pic;
+    char              *text;
 } AI_PICTURE_INPUT_T;
 
 /***********************************************************
@@ -63,15 +63,12 @@ OPERATE_RET ai_picture_input_add_from_album(char *filename, char *text)
     PR_DEBUG("add pic width:%d height:%d name:%s", item.attr.width, item.attr.height, item.filename);
 
     AI_PICTURE_INPUT_T *slot = &sg_pic_input[sg_pic_num];
-    strncpy(slot->pic.name, item.filename, AI_PICTURE_NAME_MAX_LEN);
-    slot->pic.name[AI_PICTURE_NAME_MAX_LEN] = '\0';
-    slot->pic.width                         = item.attr.width;
-    slot->pic.height                        = item.attr.height;
-    slot->pic.data                          = NULL;
-    slot->pic.len                           = 0;
+    memcpy(&slot->pic, &item, sizeof(ALBUM_IMAGE_ITEM_T));
 
-    PR_DEBUG("ai_picture_input_add name:%s, width:%d, height:%d (data deferred)", slot->pic.name, slot->pic.width,
-             slot->pic.height);
+
+    PR_DEBUG("ai_picture_input_add name:%s, width:%d, height:%d ", slot->pic.filename, 
+                                                                   slot->pic.attr.width,
+                                                                   slot->pic.attr.height);
 
     if (text && strlen(text) > 0) {
         slot->text = tal_malloc(strlen(text) + 1);
@@ -99,7 +96,7 @@ OPERATE_RET ai_picture_input_del_from_album(char *filename)
     uint8_t             idx  = 0;
 
     for (int i = 0; i < sg_pic_num; i++) {
-        if (0 == strcmp(filename, sg_pic_input[i].pic.name)) {
+        if (0 == strcmp(filename, sg_pic_input[i].pic.filename)) {
             slot = &sg_pic_input[i];
             idx  = i;
             break;
@@ -110,13 +107,7 @@ OPERATE_RET ai_picture_input_del_from_album(char *filename)
         return OPRT_NOT_FOUND;
     }
 
-    TUYA_CALL_ERR_RETURN(image_album_item_release_locked(ai_picture_get_album_handle(), slot->pic.name));
-
-    if (slot->pic.data) {
-        image_album_free_file_data(slot->pic.data);
-        slot->pic.data = NULL;
-        slot->pic.len  = 0;
-    }
+    TUYA_CALL_ERR_RETURN(image_album_item_release_locked(ai_picture_get_album_handle(), slot->pic.filename));
 
     if (slot->text) {
         tal_free(slot->text);
@@ -152,24 +143,20 @@ OPERATE_RET ai_picture_input_from_album(void)
         uint8_t           *file_data = NULL;
         size_t             file_size = 0;
         IMAGE_ALBUM_HANDLE hdl       = ai_picture_get_album_handle();
-        rt = image_album_read(hdl, slot->pic.name, AI_PICTURE_GET_STORAGE_TP, &file_data, &file_size);
+        rt = image_album_read(hdl, slot->pic.filename, AI_PICTURE_GET_STORAGE_TP, &file_data, &file_size);
         if (rt != OPRT_OK || file_data == NULL) {
-            PR_ERR("ai_picture_input_send read failed: %s, rt=%d", slot->pic.name, rt);
-            TUYA_CALL_ERR_LOG(image_album_item_release_locked(hdl, slot->pic.name));
+            PR_ERR("ai_picture_input_send read failed: %s, rt=%d", slot->pic.filename, rt);
+            TUYA_CALL_ERR_LOG(image_album_item_release_locked(hdl, slot->pic.filename));
             continue;
         }
-        slot->pic.data = file_data;
-        slot->pic.len  = (uint32_t)file_size;
 
         has_data  = true;
         timestamp = tal_system_get_millisecond();
-        PR_DEBUG("ai_picture_input_send name:%s, file_size:%d", slot->pic.name, slot->pic.len);
+        PR_DEBUG("ai_picture_input_send name:%s, file_size:%d", slot->pic.filename, &file_size);
 
-        TUYA_CALL_ERR_RETURN(tuya_ai_image_input(timestamp, (uint8_t *)slot->pic.data, slot->pic.len, slot->pic.len));
+        TUYA_CALL_ERR_RETURN(tuya_ai_image_input(timestamp, file_data, file_size, file_size));
 
-        image_album_free_file_data(slot->pic.data);
-        slot->pic.data = NULL;
-        slot->pic.len  = 0;
+        image_album_free_file_data(file_data);
 
         if (slot->text) {
             TUYA_CALL_ERR_LOG(tuya_ai_text_input((uint8_t *)slot->text, strlen(slot->text), strlen(slot->text)));
@@ -177,7 +164,7 @@ OPERATE_RET ai_picture_input_from_album(void)
             slot->text = NULL;
         }
 
-        TUYA_CALL_ERR_LOG(image_album_item_release_locked(hdl, slot->pic.name));
+        TUYA_CALL_ERR_LOG(image_album_item_release_locked(hdl, slot->pic.filename));
     }
 
     memset(sg_pic_input, 0x00, sizeof(sg_pic_input));
@@ -208,14 +195,14 @@ uint32_t ai_picture_input_get_num(void)
 OPERATE_RET ai_picture_input_recognize(uint8_t *data, uint32_t len)
 {
     OPERATE_RET rt   = OPRT_OK;
-    CHAR_T     *text = "explain the content of the uploaded image, do not trigger MCP skills, do not call MCP tools";
+    char       *text = "explain the content of the uploaded image, do not trigger MCP skills, do not call MCP tools";
 
     if (NULL == data || 0 == len) {
         return OPRT_INVALID_PARM;
     }
 
     tuya_ai_input_start(TRUE);
-    TUYA_CALL_ERR_LOG(ai_agent_send_image((UINT8_T *)data, len));
+    TUYA_CALL_ERR_LOG(ai_agent_send_image((uint8_t *)data, len));
     TUYA_CALL_ERR_LOG(ai_agent_send_text(text));
     tuya_ai_input_stop();
 

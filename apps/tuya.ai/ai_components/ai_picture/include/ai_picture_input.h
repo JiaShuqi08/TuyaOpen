@@ -55,6 +55,14 @@ OPERATE_RET ai_picture_input_from_album(void);
  */
 uint32_t ai_picture_input_get_num(void);
 
+/**
+ * @brief Send a single image with a recognition prompt to the AI agent
+ * @param[in] data JPEG image data
+ * @param[in] len JPEG data length in bytes
+ * @return OPRT_OK on success
+ */
+OPERATE_RET ai_picture_input_recognize(uint8_t *data, uint32_t len);
+
 #ifdef __cplusplus
 }
 #endif

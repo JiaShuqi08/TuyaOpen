@@ -8,6 +8,7 @@
  */
 
 #include "tal_api.h"
+#include "cJSON.h"
 #include "tuya_ai_agent.h"
 #include "ai_user_event.h"
 
@@ -64,6 +65,30 @@ static void __ai_picture_output_accum_reset(void)
 static int __set_output_picture_size_cb(void *data)
 {
     (void)data;
+
+    cJSON *custom_param = cJSON_CreateObject();
+    if(NULL ==  custom_param) {
+        return OPRT_CR_CJSON_ERR;
+    }
+
+    cJSON *cj_width = cJSON_CreateObject();
+    cJSON_AddNumberToObject(cj_width, "value", sg_picture_output.set_width);
+    cJSON_AddItemToObject(custom_param, AI_PICTURE_OUTPUT_WIDTH_KEY, cj_width);
+
+    cJSON *cj_height = cJSON_CreateObject();
+    cJSON_AddNumberToObject(cj_height, "value", sg_picture_output.set_height);
+    cJSON_AddItemToObject(custom_param, AI_PICTURE_OUTPUT_HEIGHT_KEY, cj_height);
+
+    char *out = cJSON_PrintUnformatted(custom_param);
+    cJSON_Delete(custom_param);
+
+    if(out) {
+        tuya_ai_agent_set_event_param(out);
+        PR_DEBUG("%s", out);
+        cJSON_free(out);
+    }else {
+        PR_ERR("cjson printunformatted failed");
+    }
 
     return 0;
 }
