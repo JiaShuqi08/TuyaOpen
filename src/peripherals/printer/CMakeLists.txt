@@ -22,6 +22,15 @@ if (CONFIG_ENABLE_PRINTER_MTP02 STREQUAL "y")
     list(APPEND LIB_SRCS ${MODULE_PATH}/tdd_printer/src/tdd_printer_mtp02.c)
 endif()
 
+if (CONFIG_ENABLE_PRINTER_DP48 STREQUAL "y")
+    list(APPEND LIB_SRCS ${MODULE_PATH}/tdd_printer/src/tdd_printer_dp48.c)
+endif()
+
+# LIB_PRIVATE_INC
+set(LIB_PRIVATE_INC
+    ${MODULE_PATH}/tdl_printer/src
+)
+
 # LIB_PUBLIC_INC
 set(LIB_PUBLIC_INC
     ${MODULE_PATH}/tdl_printer/include

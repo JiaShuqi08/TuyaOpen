@@ -42,4 +42,9 @@ if (ENABLE_PRINTER)
         default 3
         range 1 10
         depends on ENABLE_PRINTER_MTP02
+
+    config ENABLE_PRINTER_DP48
+        bool "enable DP48A ESC/POS UART printer driver"
+        default n
+        depends on ENABLE_PRINTER
 endif
