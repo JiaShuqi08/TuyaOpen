@@ -129,6 +129,23 @@ OPERATE_RET tdl_printer_paper_feed(TDL_PRINTER_HANDLE handle, uint32_t lines);
 OPERATE_RET tdl_printer_send_text(TDL_PRINTER_HANDLE handle, const char *text);
 
 /**
+ * @brief Send a monochrome bitmap to the printer
+ * @param[in] handle printer handle
+ * @param[in] x      horizontal start position in dots (0 = left edge)
+ * @param[in] width  image width in pixels
+ * @param[in] height image height in pixels
+ * @param[in] data   1-bit monochrome bitmap, row-major, MSB first,
+ *                   (width+7)/8 bytes per row
+ * @return OPRT_OK on success
+ * @note Images extending beyond the right edge are silently clipped.
+ *       If x >= printer_width, the call succeeds without printing anything.
+ *       For RAW protocol, dots_per_line must be non-zero.
+ */
+OPERATE_RET tdl_printer_send_bitmap(TDL_PRINTER_HANDLE handle,
+                                    uint16_t x, uint16_t width,
+                                    uint16_t height, const uint8_t *data);
+
+/**
  * @brief Close the printer and release resources
  * @param[in] handle printer handle
  * @return OPRT_OK on success

@@ -550,3 +550,153 @@ OPERATE_RET tdl_printer_send_text(TDL_PRINTER_HANDLE handle, const char *text)
     /* UTF-8 or NONE: pass through */
     return node->intfs.write(node->tdd_handle, (const uint8_t *)text, (uint32_t)text_len);
 }
+
+/**
+ * @brief Copy eff_width bits from src (starting at bit 0) into dst (starting
+ *        at bit x), zero-padding the rest of dst. dst must be zero-filled
+ *        before calling.
+ */
+static void __bitmap_place_row(uint8_t *dst, uint16_t dst_bytes,
+                                const uint8_t *src,
+                                uint16_t x, uint16_t eff_width)
+{
+    if (x % 8 == 0) {
+        /* Byte-aligned fast path */
+        uint16_t eff_bytes = (eff_width + 7) / 8;
+        memcpy(dst + x / 8, src, eff_bytes);
+        if (eff_width % 8 != 0) {
+            dst[x / 8 + eff_bytes - 1] &= (uint8_t)(0xFF << (8 - (eff_width % 8)));
+        }
+    } else {
+        /* Non-aligned: bit-by-bit copy */
+        for (uint16_t i = 0; i < eff_width; i++) {
+            uint8_t bit = (src[i / 8] >> (7 - (i % 8))) & 1;
+            if (bit) {
+                uint16_t dst_pos = x + i;
+                dst[dst_pos / 8] |= (uint8_t)(1 << (7 - (dst_pos % 8)));
+            }
+        }
+    }
+    (void)dst_bytes;
+}
+
+static OPERATE_RET __send_bitmap_escpos(TDL_PRINTER_NODE_T *node,
+                                         uint16_t x, uint16_t eff_width,
+                                         uint16_t src_bytes_per_row,
+                                         uint16_t height,
+                                         const uint8_t *data)
+{
+    /* Row width includes left padding (x bits) */
+    uint16_t total_width = x + eff_width;
+    uint16_t total_bytes = (total_width + 7) / 8;
+
+    /* GS v 0 command */
+    uint8_t cmd[] = {
+        0x1D, 0x76, 0x30, 0x00,
+        (uint8_t)(total_bytes & 0xFF), (uint8_t)(total_bytes >> 8),
+        (uint8_t)(height & 0xFF),      (uint8_t)(height >> 8)
+    };
+    TUYA_CALL_ERR_RETURN(node->intfs.write(node->tdd_handle, cmd, sizeof(cmd)));
+
+    uint8_t *row_buf = (uint8_t *)tal_malloc(total_bytes);
+    if (row_buf == NULL) {
+        return OPRT_MALLOC_FAILED;
+    }
+
+    for (uint16_t row = 0; row < height; row++) {
+        const uint8_t *src_row = data + (uint32_t)row * src_bytes_per_row;
+        memset(row_buf, 0, total_bytes);
+        __bitmap_place_row(row_buf, total_bytes, src_row, x, eff_width);
+        OPERATE_RET rt = node->intfs.write(node->tdd_handle, row_buf, total_bytes);
+        if (rt != OPRT_OK) {
+            tal_free(row_buf);
+            return rt;
+        }
+    }
+
+    tal_free(row_buf);
+    return OPRT_OK;
+}
+
+static OPERATE_RET __send_bitmap_raw(TDL_PRINTER_NODE_T *node,
+                                      uint16_t x, uint16_t eff_width,
+                                      uint16_t src_bytes_per_row,
+                                      uint16_t height,
+                                      const uint8_t *data)
+{
+    uint16_t printer_bytes = (uint16_t)((node->dev_info.dots_per_line + 7) / 8);
+
+    uint8_t *row_buf = (uint8_t *)tal_malloc(printer_bytes);
+    if (row_buf == NULL) {
+        return OPRT_MALLOC_FAILED;
+    }
+
+    for (uint16_t row = 0; row < height; row++) {
+        const uint8_t *src_row = data + (uint32_t)row * src_bytes_per_row;
+        memset(row_buf, 0, printer_bytes);
+        __bitmap_place_row(row_buf, printer_bytes, src_row, x, eff_width);
+        OPERATE_RET rt = node->intfs.write(node->tdd_handle, row_buf, printer_bytes);
+        if (rt != OPRT_OK) {
+            tal_free(row_buf);
+            return rt;
+        }
+    }
+
+    tal_free(row_buf);
+    return OPRT_OK;
+}
+
+/**
+ * @brief Send a monochrome bitmap to the printer
+ */
+OPERATE_RET tdl_printer_send_bitmap(TDL_PRINTER_HANDLE handle,
+                                    uint16_t x, uint16_t width,
+                                    uint16_t height, const uint8_t *data)
+{
+    TUYA_CHECK_NULL_RETURN(handle, OPRT_INVALID_PARM);
+    TUYA_CHECK_NULL_RETURN(data, OPRT_INVALID_PARM);
+
+    TDL_PRINTER_NODE_T *node = (TDL_PRINTER_NODE_T *)handle;
+
+    if (node->magic != TDL_PRINTER_MAGIC) {
+        PR_ERR("Invalid printer handle magic: %d", node->magic);
+        return OPRT_COM_ERROR;
+    }
+
+    if (node->status != TDL_PRINTER_STATUS_INITED) {
+        PR_ERR("Printer not opened, status: %d, name: %s", node->status, node->name);
+        return OPRT_COM_ERROR;
+    }
+
+    TUYA_CHECK_NULL_RETURN(node->intfs.write, OPRT_INVALID_PARM);
+
+    uint16_t printer_width = (uint16_t)node->dev_info.dots_per_line;
+
+    /* RAW protocol with no dots info can't do bitmap */
+    if (node->dev_info.protocol == TDD_PRINTER_PROTOCOL_RAW && printer_width == 0) {
+        return OPRT_NOT_SUPPORTED;
+    }
+
+    /* x entirely outside print area */
+    if (printer_width > 0 && x >= printer_width) {
+        return OPRT_OK;
+    }
+
+    if (width == 0 || height == 0) {
+        return OPRT_OK;
+    }
+
+    /* Clip right edge */
+    uint16_t eff_width = width;
+    if (printer_width > 0 && (uint32_t)x + width > printer_width) {
+        eff_width = printer_width - x;
+    }
+
+    uint16_t src_bytes_per_row = (width + 7) / 8;
+
+    if (node->dev_info.protocol == TDD_PRINTER_PROTOCOL_ESCPOS) {
+        return __send_bitmap_escpos(node, x, eff_width, src_bytes_per_row, height, data);
+    } else {
+        return __send_bitmap_raw(node, x, eff_width, src_bytes_per_row, height, data);
+    }
+}
