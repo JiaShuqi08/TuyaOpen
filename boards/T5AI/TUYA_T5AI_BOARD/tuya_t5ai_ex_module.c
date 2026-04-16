@@ -31,7 +31,9 @@
 /***********************************************************
 ***********************function define**********************
 ***********************************************************/
-#if defined (TUYA_T5AI_BOARD_EX_MODULE_35565LCD) && (TUYA_T5AI_BOARD_EX_MODULE_35565LCD ==1)
+
+/* ---- LCD ---- */
+#if defined (TUYA_T5AI_BOARD_LCD_35565) && (TUYA_T5AI_BOARD_LCD_35565 ==1)
 static OPERATE_RET __board_register_display(void)
 {
     OPERATE_RET rt = OPRT_OK;
@@ -86,7 +88,8 @@ static OPERATE_RET __board_register_display(void)
 
     return rt;
 }
-#elif defined (TUYA_T5AI_BOARD_EX_MODULE_EYES) && (TUYA_T5AI_BOARD_EX_MODULE_EYES ==1)
+
+#elif defined (TUYA_T5AI_BOARD_LCD_EYES) && (TUYA_T5AI_BOARD_LCD_EYES ==1)
 static OPERATE_RET __board_register_display(void)
 {
     OPERATE_RET rt = OPRT_OK;
@@ -111,7 +114,7 @@ static OPERATE_RET __board_register_display(void)
     display_cfg.dc_pin    = BOARD_LCD_SPI_DC_PIN;
     display_cfg.rst_pin   = BOARD_LCD_SPI_RST_PIN;
 
-    display_cfg.power.pin          = BOARD_LCD_POWER_PIN;
+    display_cfg.power.pin = BOARD_LCD_POWER_PIN;
 
     TUYA_CALL_ERR_RETURN(tdd_disp_spi_st7735s_register(DISPLAY_NAME, &display_cfg));
 #endif
@@ -136,15 +139,16 @@ static OPERATE_RET __board_register_display(void)
     display2_cfg.dc_pin    = BOARD_LCD_SPI2_DC_PIN;
     display2_cfg.rst_pin   = BOARD_LCD_SPI2_RST_PIN;
 
-    display2_cfg.power.pin  = BOARD_LCD_POWER_PIN;
+    display2_cfg.power.pin = BOARD_LCD_POWER_PIN;
 
     TUYA_CALL_ERR_RETURN(tdd_disp_spi_st7735s_register(DISPLAY_NAME_2, &display2_cfg));
 #endif
 
     return rt;
 }
-#elif defined (TUYA_T5AI_BOARD_EX_MODULE_096_OLED) && (TUYA_T5AI_BOARD_EX_MODULE_096_OLED ==1)
-static OPERATE_RET __board_register_display(void)   
+
+#elif defined (TUYA_T5AI_BOARD_LCD_096_OLED) && (TUYA_T5AI_BOARD_LCD_096_OLED ==1)
+static OPERATE_RET __board_register_display(void)
 {
     OPERATE_RET rt = OPRT_OK;
 
@@ -179,11 +183,11 @@ static OPERATE_RET __board_register_display(void)
 {
     return OPRT_OK;
 }
-
 #endif
 
 
-#if defined (ENABLE_EX_MODULE_CAMERA) && (ENABLE_EX_MODULE_CAMERA ==1)
+/* ---- Camera ---- */
+#if defined (TUYA_T5AI_BOARD_CAMERA) && (TUYA_T5AI_BOARD_CAMERA ==1)
 static OPERATE_RET __board_register_camera(void)
 {
 #if defined(CAMERA_NAME)
@@ -196,7 +200,7 @@ static OPERATE_RET __board_register_camera(void)
             .pin = BOARD_CAMERA_RST_PIN,
             .active_level = BOARD_CAMERA_RST_ACTIVE_LV,
         },
-        .i2c ={
+        .i2c = {
             .port = BOARD_CAMERA_I2C_PORT,
             .clk  = BOARD_CAMERA_I2C_SCL,
             .sda  = BOARD_CAMERA_I2C_SDA,
@@ -217,7 +221,8 @@ static OPERATE_RET __board_register_camera(void)
 #endif
 
 
-#if defined (TUYA_T5AI_BOARD_EX_MODULE_DP48_PRINTER) && (TUYA_T5AI_BOARD_EX_MODULE_DP48_PRINTER ==1)
+/* ---- Printer ---- */
+#if defined (TUYA_T5AI_BOARD_PRINTER_DP48) && (TUYA_T5AI_BOARD_PRINTER_DP48 ==1)
 static OPERATE_RET __board_register_printer(void)
 {
 #if defined(PRINTER_NAME)
