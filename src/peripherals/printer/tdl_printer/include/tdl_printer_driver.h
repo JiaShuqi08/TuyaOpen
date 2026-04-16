@@ -34,12 +34,25 @@ typedef struct {
     int32_t temperature;
 } TDD_PRINTER_DEV_STATUS_T;
 
+typedef enum {
+    TDD_PRINTER_ENCODING_NONE = 0,  /* raw mode (MTP02, generic UART) */
+    TDD_PRINTER_ENCODING_UTF8 = 1,  /* driver accepts UTF-8 natively */
+    TDD_PRINTER_ENCODING_GBK  = 2,  /* driver requires GBK (DP48A) */
+} TDD_PRINTER_ENCODING_E;
+
+typedef enum {
+    TDD_PRINTER_PROTOCOL_RAW    = 0, /* raw dot bitmap (MTP02) */
+    TDD_PRINTER_PROTOCOL_ESCPOS = 1, /* ESC/POS UART (DP48A) */
+} TDD_PRINTER_PROTOCOL_E;
+
 typedef struct {
     uint32_t dots_per_line;
     uint32_t bytes_per_line;
     uint32_t head_blocks;
     uint32_t dots_per_block;
     uint32_t steps_per_dot_line;
+    TDD_PRINTER_ENCODING_E encoding;
+    TDD_PRINTER_PROTOCOL_E protocol;
 } TDD_PRINTER_DEV_INFO_T;
 
 typedef struct {
