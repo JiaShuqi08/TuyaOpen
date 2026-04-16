@@ -8,13 +8,15 @@
 
 #if defined(ENABLE_COMP_AI_DISPLAY) && (ENABLE_COMP_AI_DISPLAY == 1)
 #include "ai_ui_manage.h"
+
+#if defined(ENABLE_COMP_AI_PICTURE) && (ENABLE_COMP_AI_PICTURE == 1)
+#include "image_album.h"
 #include "ai_picture.h"
 #include "ai_picture_input.h"
+#endif
+
 #if defined(ENABLE_COMP_AI_VIDEO) && (ENABLE_COMP_AI_VIDEO == 1)
 #include "ai_video_input.h"
-#endif
-#if defined(ENABLE_IMAGE_ALBUM) && (ENABLE_IMAGE_ALBUM == 1)
-#include "image_album.h"
 #endif
 
 /***********************************************************
@@ -108,7 +110,7 @@ static void __app_ui_action_handle(AI_UI_ACTION_E action, uint8_t *data, uint32_
         break;
 #endif /* ENABLE_COMP_AI_VIDEO */
 
-#if defined(ENABLE_IMAGE_ALBUM) && (ENABLE_IMAGE_ALBUM == 1)
+#if defined(ENABLE_COMP_AI_PICTURE) && (ENABLE_COMP_AI_PICTURE == 1)
     case AI_UI_ACT_OPEN_ALBUM: {
         char *album_name = ai_picture_get_album_name();
         if (album_name) {
