@@ -39,10 +39,13 @@ static AI_UI_WIFI_STATUS_E sg_wifi_status = AI_UI_WIFI_STATUS_DISCONNECTED;
 static TIMER_ID            sg_disp_status_tm;
 #endif
 
-extern void app_ui_action_register(void);
 /***********************************************************
 ***********************function define**********************
 ***********************************************************/
+#if defined(ENABLE_COMP_AI_DISPLAY) && (ENABLE_COMP_AI_DISPLAY == 1)
+extern void app_ui_action_register(void);
+#endif
+
 static void __printf_free_heap_tm_cb(TIMER_ID timer_id, void *arg)
 {
 #if defined(ENABLE_EXT_RAM) && (ENABLE_EXT_RAM == 1)
@@ -113,7 +116,9 @@ OPERATE_RET app_chat_bot_init(void)
     };
     TUYA_CALL_ERR_RETURN(ai_chat_init(&ai_chat_cfg));
 
+#if defined(ENABLE_COMP_AI_DISPLAY) && (ENABLE_COMP_AI_DISPLAY == 1)
     app_ui_action_register();
+#endif
 
 #if defined(ENABLE_COMP_AI_VIDEO) && (ENABLE_COMP_AI_VIDEO == 1)
     TUYA_CALL_ERR_LOG(ai_video_init());
