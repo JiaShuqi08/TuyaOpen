@@ -23,12 +23,16 @@ void ai_ui_wechat_chat_init(lv_obj_t *parent);
 void ai_ui_wechat_chat_register(void);
 
 /* Camera page */
+#if defined(ENABLE_COMP_AI_VIDEO) && (ENABLE_COMP_AI_VIDEO == 1)
 void ai_ui_wechat_camera_init(lv_obj_t *parent);
 void ai_ui_wechat_camera_register(void);
+#endif
 
 /* Album page */
+#if defined(ENABLE_IMAGE_ALBUM) && (ENABLE_IMAGE_ALBUM == 1)
 void ai_ui_wechat_album_init(lv_obj_t *parent);
 void ai_ui_wechat_album_register(void);
+#endif
 
 #ifdef __cplusplus
 }

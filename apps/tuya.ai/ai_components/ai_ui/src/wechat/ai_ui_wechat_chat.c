@@ -18,9 +18,13 @@
 #include "tal_image.h"
 
 LV_IMG_DECLARE(icon_ai_icon);
+#if defined(ENABLE_COMP_AI_VIDEO) && (ENABLE_COMP_AI_VIDEO == 1)
 LV_IMG_DECLARE(icon_camera_app);
+#endif
+#if defined(ENABLE_IMAGE_ALBUM) && (ENABLE_IMAGE_ALBUM == 1)
 LV_IMG_DECLARE(icon_photo_app);
 LV_IMG_DECLARE(icon_add_img);
+#endif
 
 /***********************************************************
 ************************macro define************************
@@ -241,13 +245,16 @@ static void __popup_dismiss(void)
     }
 }
 
+#if defined(ENABLE_COMP_AI_VIDEO) && (ENABLE_COMP_AI_VIDEO == 1)
 static void __popup_camera_cb(lv_event_t *e)
 {
     (void)e;
     __popup_dismiss();
     ai_ui_notify_action(AI_UI_ACT_OPEN_CAMERA, NULL, 0);
 }
+#endif
 
+#if defined(ENABLE_IMAGE_ALBUM) && (ENABLE_IMAGE_ALBUM == 1)
 static void __popup_album_cb(lv_event_t *e)
 {
     (void)e;
@@ -261,6 +268,7 @@ static void __popup_add_img_cb(lv_event_t *e)
     __popup_dismiss();
     ai_ui_notify_action(AI_UI_ACT_OPEN_IMG_ATTACH_LIST, NULL, 0);
 }
+#endif
 
 /**
  * @brief Dismiss popup when user clicks on the chat content area.
@@ -839,6 +847,7 @@ void ai_ui_wechat_chat_init(lv_obj_t *parent)
     lv_obj_clear_flag(sg_chat.popup_menu, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_flag(sg_chat.popup_menu, LV_OBJ_FLAG_HIDDEN);
 
+#if defined(ENABLE_COMP_AI_VIDEO) && (ENABLE_COMP_AI_VIDEO == 1)
     /* Camera option */
     lv_obj_t *cam_btn = lv_obj_create(sg_chat.popup_menu);
     lv_obj_set_size(cam_btn, POPUP_WIDTH - 4, POPUP_ITEM_H);
@@ -868,7 +877,9 @@ void ai_ui_wechat_chat_init(lv_obj_t *parent)
     lv_obj_set_style_text_color(cam_label, lv_color_hex(0x333333), 0);
     lv_label_set_text(cam_label, CAMERA);
     lv_obj_add_event_cb(cam_btn, __popup_camera_cb, LV_EVENT_CLICKED, NULL);
+#endif /* ENABLE_COMP_AI_VIDEO */
 
+#if defined(ENABLE_IMAGE_ALBUM) && (ENABLE_IMAGE_ALBUM == 1)
     /* Album option */
     lv_obj_t *album_btn = lv_obj_create(sg_chat.popup_menu);
     lv_obj_set_size(album_btn, POPUP_WIDTH - 4, POPUP_ITEM_H);
@@ -928,6 +939,7 @@ void ai_ui_wechat_chat_init(lv_obj_t *parent)
     lv_obj_set_style_text_color(add_img_label, lv_color_hex(0x333333), 0);
     lv_label_set_text(add_img_label, ADD_IMAGE);
     lv_obj_add_event_cb(add_img_btn, __popup_add_img_cb, LV_EVENT_CLICKED, NULL);
+#endif /* ENABLE_IMAGE_ALBUM */
 }
 
 /**

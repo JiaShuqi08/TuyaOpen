@@ -6,7 +6,7 @@
 
 #include "tal_api.h"
 
-#include "lvgl.h"
+#if defined(ENABLE_AI_CHAT_GUI_WECHAT) && (ENABLE_AI_CHAT_GUI_WECHAT == 1)
 #include "lv_vendor.h"
 
 #include "ai_ui_manage.h"
@@ -216,8 +216,12 @@ static OPERATE_RET __ui_init(void)
 
     /* Init sub-pages */
     ai_ui_wechat_chat_init(sg_main.container);
+#if defined(ENABLE_COMP_AI_VIDEO) && (ENABLE_COMP_AI_VIDEO == 1)
     ai_ui_wechat_camera_init(screen);
+#endif
+#if defined(ENABLE_IMAGE_ALBUM) && (ENABLE_IMAGE_ALBUM == 1)
     ai_ui_wechat_album_init(screen);
+#endif
 
     lv_vendor_disp_unlock();
 
@@ -243,8 +247,14 @@ OPERATE_RET ai_ui_chat_wechat_register(void)
 
     /* Sub-pages register independently */
     ai_ui_wechat_chat_register();
+#if defined(ENABLE_COMP_AI_VIDEO) && (ENABLE_COMP_AI_VIDEO == 1)
     ai_ui_wechat_camera_register();
+#endif
+#if defined(ENABLE_IMAGE_ALBUM) && (ENABLE_IMAGE_ALBUM == 1)
     ai_ui_wechat_album_register();
+#endif
 
     return OPRT_OK;
 }
+
+#endif /* ENABLE_AI_CHAT_GUI_WECHAT */
