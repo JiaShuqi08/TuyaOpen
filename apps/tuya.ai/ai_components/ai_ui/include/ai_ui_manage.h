@@ -68,10 +68,7 @@ typedef enum {
     AI_UI_DISP_ALBUM_RELOAD,
     AI_UI_DISP_ALBUM_CLOSE,
 
-#if defined(ENABLE_PRINTER) && (ENABLE_PRINTER == 1)
-    AI_UI_DISP_PRINTER_OPEN,
-    AI_UI_DISP_PRINTER_CLOSE,
-#endif
+    AI_UI_DISP_PRINT_RESULT,
 
     AI_UI_DISP_SYS_MAX,
 }AI_UI_DISP_TYPE_E;
@@ -82,6 +79,7 @@ typedef enum {
     AI_UI_ACT_CLOSE_CAMER,
     AI_UI_ACT_CAMERA_AI_ON,
     AI_UI_ACT_CAMERA_AI_OFF,
+
     AI_UI_ACT_OPEN_ALBUM,
     AI_UI_ACT_VIEW_PREV_IMG,
     AI_UI_ACT_VIEW_NEXT_IMG,
@@ -92,11 +90,9 @@ typedef enum {
     AI_UI_ACT_OPEN_IMG_ATTACH_LIST,
     AI_UI_ACT_ADD_IMG_ATTACH,
     AI_UI_ACT_DEL_IMG_ATTACH,
-#if defined(ENABLE_PRINTER) && (ENABLE_PRINTER == 1)
-    AI_UI_ACT_OPEN_PRINTER,
+    
     AI_UI_ACT_PRINT_IMG,
-    AI_UI_ACT_CLOSE_PRINTER,
-#endif
+
     AI_UI_ACT_MAX
 } AI_UI_ACTION_E;
 
@@ -129,6 +125,9 @@ typedef struct {
     void (*disp_all_img_thumb_list)(AI_UI_IMG_T *item_arr, uint32_t arr_cnt);
     void (*disp_select_img_thumb_list)(AI_UI_IMG_T *item_arr, uint32_t arr_cnt, uint8_t select_num_max);
     void (*disp_close)(void);
+#if defined(ENABLE_PRINTER) && (ENABLE_PRINTER == 1)
+    void (*disp_print_result)(bool ok);
+#endif
 } AI_UI_ALBUM_INTFS_T;
 
 typedef struct {

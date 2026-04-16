@@ -575,4 +575,13 @@ void ai_ui_image_album_close(void)
     }
 }
 
+#if defined(ENABLE_PRINTER) && (ENABLE_PRINTER == 1)
+void ai_ui_image_album_show_print_result(bool ok)
+{
+    if (sg_album_intfs.disp_print_result) {
+        sg_album_intfs.disp_print_result(ok);
+    }
+}
+#endif
+
 #endif

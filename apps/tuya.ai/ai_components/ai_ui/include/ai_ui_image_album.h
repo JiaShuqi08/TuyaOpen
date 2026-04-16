@@ -52,6 +52,10 @@ void ai_ui_image_album_reload(void);
 
 void ai_ui_image_album_close(void);
 
+#if defined(ENABLE_PRINTER) && (ENABLE_PRINTER == 1)
+void ai_ui_image_album_show_print_result(bool ok);
+#endif
+
 
 #ifdef __cplusplus
 }

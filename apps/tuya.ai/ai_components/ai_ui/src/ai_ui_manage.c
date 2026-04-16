@@ -246,6 +246,7 @@ static void __page_register_all(void)
     intfs.close = __page_album_select_close;
     ai_ui_page_register(AI_UI_PAGE_ALBUM_SELECT, &intfs);
 #endif
+
 }
 
 /**
@@ -436,6 +437,15 @@ static void __ui_disp_msg_handle(AI_UI_MSG_T *msg_data)
             ai_ui_page_close();
             break;
 #endif
+
+#if defined(ENABLE_PRINTER) && (ENABLE_PRINTER == 1)
+        case AI_UI_DISP_PRINT_RESULT: {
+            bool ok = (msg_data->len == sizeof(int32_t) &&
+                       *(int32_t *)msg_data->data == OPRT_OK);
+            ai_ui_image_album_show_print_result(ok);
+        } break;
+#endif
+
         default:
             if (sg_ui_intfs.disp_other_msg) {
                 sg_ui_intfs.disp_other_msg(msg_data->type, (uint8_t *)msg_data->data, msg_data->len);

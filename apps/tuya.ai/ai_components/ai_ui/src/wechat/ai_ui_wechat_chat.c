@@ -270,6 +270,7 @@ static void __popup_add_img_cb(lv_event_t *e)
 }
 #endif
 
+
 /**
  * @brief Dismiss popup when user clicks on the chat content area.
  */

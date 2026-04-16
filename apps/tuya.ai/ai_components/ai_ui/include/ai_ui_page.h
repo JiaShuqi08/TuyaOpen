@@ -29,9 +29,6 @@ typedef enum {
     AI_UI_PAGE_ALBUM_VIEW,
     AI_UI_PAGE_ALBUM_ALL,
     AI_UI_PAGE_ALBUM_SELECT,
-#if defined(ENABLE_PRINTER) && (ENABLE_PRINTER == 1)
-    AI_UI_PAGE_PRINTER,
-#endif
     AI_UI_PAGE_MAX
 } AI_UI_PAGE_E;
 

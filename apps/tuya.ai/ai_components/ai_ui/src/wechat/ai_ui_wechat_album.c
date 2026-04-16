@@ -22,6 +22,9 @@ LV_IMG_DECLARE(icon_back_24_24);
 LV_IMG_DECLARE(icon_photo_app);
 LV_IMG_DECLARE(icon_choose);
 LV_IMG_DECLARE(icon_delete);
+#if defined(ENABLE_PRINTER) && (ENABLE_PRINTER == 1)
+LV_IMG_DECLARE(icon_printer_app);
+#endif
 
 /***********************************************************
 ************************macro define************************
@@ -55,6 +58,13 @@ typedef struct {
     lv_obj_t *select_page;
     lv_obj_t *select_grid;
     lv_obj_t *select_empty_label;
+
+#if defined(ENABLE_PRINTER) && (ENABLE_PRINTER == 1)
+    lv_obj_t *print_overlay;
+    lv_obj_t *print_status_label;
+    lv_obj_t *print_btn_row;
+    lv_timer_t *print_result_tm;
+#endif
 } AI_UI_WECHAT_ALBUM_T;
 
 /***********************************************************
@@ -278,6 +288,58 @@ static void __select_item_click_cb(lv_event_t *e)
 
 /* ── helper: create an image icon button ── */
 
+#if defined(ENABLE_PRINTER) && (ENABLE_PRINTER == 1)
+static void __view_print_btn_cb(lv_event_t *e)
+{
+    (void)e;
+    if (sg_album.view_current_name[0] == '\0') {
+        return;
+    }
+    lv_obj_clear_flag(sg_album.print_overlay, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_move_foreground(sg_album.print_overlay);
+}
+
+static void __print_cancel_btn_cb(lv_event_t *e)
+{
+    (void)e;
+    lv_obj_add_flag(sg_album.print_overlay, LV_OBJ_FLAG_HIDDEN);
+}
+
+static void __print_confirm_btn_cb(lv_event_t *e)
+{
+    (void)e;
+    /* Switch overlay to "printing" state — keep it visible so the user sees feedback */
+    lv_label_set_text(sg_album.print_status_label, PRINTING);
+    lv_obj_add_flag(sg_album.print_btn_row, LV_OBJ_FLAG_HIDDEN);
+    ai_ui_notify_action(AI_UI_ACT_PRINT_IMG,
+                        (uint8_t *)sg_album.view_current_name,
+                        (uint32_t)strlen(sg_album.view_current_name));
+}
+
+static void __print_result_timeout_cb(lv_timer_t *timer)
+{
+    (void)timer;
+    lv_timer_del(sg_album.print_result_tm);
+    sg_album.print_result_tm = NULL;
+    lv_obj_add_flag(sg_album.print_overlay, LV_OBJ_FLAG_HIDDEN);
+    /* Restore overlay to confirmation state for next use */
+    lv_label_set_text(sg_album.print_status_label, PRINT_IMAGE);
+    lv_obj_clear_flag(sg_album.print_btn_row, LV_OBJ_FLAG_HIDDEN);
+}
+
+static void __disp_print_result(bool ok)
+{
+    lv_vendor_disp_lock();
+    lv_label_set_text(sg_album.print_status_label, ok ? PRINT_SUCCESS : PRINT_FAILED);
+    if (sg_album.print_result_tm == NULL) {
+        sg_album.print_result_tm = lv_timer_create(__print_result_timeout_cb, 2000, NULL);
+    } else {
+        lv_timer_reset(sg_album.print_result_tm);
+    }
+    lv_vendor_disp_unlock();
+}
+#endif /* ENABLE_PRINTER */
+
 static lv_obj_t *__create_icon_btn(lv_obj_t *parent, const lv_img_dsc_t *src,
                                     lv_event_cb_t cb)
 {
@@ -401,6 +463,77 @@ static void __create_view_page(lv_obj_t *parent)
 
     /* Align after label text is set so LV_SIZE_CONTENT is computed correctly */
     lv_obj_align(all_photos_btn, LV_ALIGN_BOTTOM_RIGHT, -8, -12);
+
+#if defined(ENABLE_PRINTER) && (ENABLE_PRINTER == 1)
+    /* Print button — top-right, circle style */
+    lv_obj_t *print_btn = __create_icon_btn(sg_album.view_page, &icon_printer_app,
+                                             __view_print_btn_cb);
+    lv_obj_align(print_btn, LV_ALIGN_TOP_RIGHT, -4, 4);
+    lv_obj_add_flag(print_btn, LV_OBJ_FLAG_GESTURE_BUBBLE);
+
+    /* Print confirmation overlay — full-screen semi-transparent panel */
+    sg_album.print_overlay = lv_obj_create(sg_album.view_page);
+    lv_obj_set_size(sg_album.print_overlay, LV_HOR_RES, LV_VER_RES);
+    lv_obj_set_pos(sg_album.print_overlay, 0, 0);
+    lv_obj_set_style_bg_color(sg_album.print_overlay, lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(sg_album.print_overlay, LV_OPA_70, 0);
+    lv_obj_set_style_border_width(sg_album.print_overlay, 0, 0);
+    lv_obj_set_style_radius(sg_album.print_overlay, 0, 0);
+    lv_obj_clear_flag(sg_album.print_overlay, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(sg_album.print_overlay, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_flex_flow(sg_album.print_overlay, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(sg_album.print_overlay, LV_FLEX_ALIGN_CENTER,
+                          LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_row(sg_album.print_overlay, 24, 0);
+
+    /* Title */
+    lv_obj_t *print_title = lv_label_create(sg_album.print_overlay);
+    lv_obj_set_style_text_color(print_title, lv_color_white(), 0);
+    lv_label_set_text(print_title, PRINT_IMAGE);
+    sg_album.print_status_label = print_title;
+
+    /* Button row */
+    lv_obj_t *btn_row = lv_obj_create(sg_album.print_overlay);
+    lv_obj_remove_style_all(btn_row);
+    lv_obj_set_size(btn_row, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(btn_row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(btn_row, LV_FLEX_ALIGN_CENTER,
+                          LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(btn_row, 24, 0);
+    sg_album.print_btn_row = btn_row;
+
+    /* Cancel button */
+    lv_obj_t *cancel_btn = lv_obj_create(btn_row);
+    lv_obj_set_size(cancel_btn, 80, 36);
+    lv_obj_set_style_bg_color(cancel_btn, lv_color_hex(0x555555), 0);
+    lv_obj_set_style_bg_opa(cancel_btn, LV_OPA_COVER, 0);
+    lv_obj_set_style_radius(cancel_btn, 8, 0);
+    lv_obj_set_style_border_width(cancel_btn, 0, 0);
+    lv_obj_set_style_pad_all(cancel_btn, 0, 0);
+    lv_obj_clear_flag(cancel_btn, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(cancel_btn, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_t *cancel_label = lv_label_create(cancel_btn);
+    lv_obj_set_style_text_color(cancel_label, lv_color_white(), 0);
+    lv_label_set_text(cancel_label, CANCEL);
+    lv_obj_center(cancel_label);
+    lv_obj_add_event_cb(cancel_btn, __print_cancel_btn_cb, LV_EVENT_CLICKED, NULL);
+
+    /* Confirm button */
+    lv_obj_t *confirm_btn = lv_obj_create(btn_row);
+    lv_obj_set_size(confirm_btn, 80, 36);
+    lv_obj_set_style_bg_color(confirm_btn, lv_color_hex(0x07C160), 0);
+    lv_obj_set_style_bg_opa(confirm_btn, LV_OPA_COVER, 0);
+    lv_obj_set_style_radius(confirm_btn, 8, 0);
+    lv_obj_set_style_border_width(confirm_btn, 0, 0);
+    lv_obj_set_style_pad_all(confirm_btn, 0, 0);
+    lv_obj_clear_flag(confirm_btn, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(confirm_btn, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_t *confirm_label = lv_label_create(confirm_btn);
+    lv_obj_set_style_text_color(confirm_label, lv_color_white(), 0);
+    lv_label_set_text(confirm_label, CONFIRM_TEXT);
+    lv_obj_center(confirm_label);
+    lv_obj_add_event_cb(confirm_btn, __print_confirm_btn_cb, LV_EVENT_CLICKED, NULL);
+#endif /* ENABLE_PRINTER */
 }
 
 static void __create_all_page(lv_obj_t *parent)
@@ -576,6 +709,9 @@ static void __disp_image(AI_UI_IMG_T *img)
             sg_album.view_buf = NULL;
         }
         lv_obj_clear_flag(sg_album.view_empty_label, LV_OBJ_FLAG_HIDDEN);
+#if defined(ENABLE_PRINTER) && (ENABLE_PRINTER == 1)
+        lv_obj_add_flag(sg_album.print_overlay, LV_OBJ_FLAG_HIDDEN);
+#endif
         lv_vendor_disp_unlock();
         return;
     }
@@ -631,6 +767,9 @@ static void __disp_image(AI_UI_IMG_T *img)
     lv_obj_center(sg_album.view_canvas);
     lv_obj_clear_flag(sg_album.view_canvas, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(sg_album.view_empty_label, LV_OBJ_FLAG_HIDDEN);
+#if defined(ENABLE_PRINTER) && (ENABLE_PRINTER == 1)
+    lv_obj_add_flag(sg_album.print_overlay, LV_OBJ_FLAG_HIDDEN);
+#endif
 
     lv_vendor_disp_unlock();
 }
@@ -774,6 +913,10 @@ static void __disp_close(void)
         sg_album.view_buf = NULL;
     }
 
+#if defined(ENABLE_PRINTER) && (ENABLE_PRINTER == 1)
+    lv_obj_add_flag(sg_album.print_overlay, LV_OBJ_FLAG_HIDDEN);
+#endif
+
     lv_vendor_disp_unlock();
 }
 
@@ -807,6 +950,9 @@ void ai_ui_wechat_album_register(void)
     intfs.disp_all_img_thumb_list     = __disp_all_img_thumb_list;
     intfs.disp_select_img_thumb_list  = __disp_select_img_thumb_list;
     intfs.disp_close                  = __disp_close;
+#if defined(ENABLE_PRINTER) && (ENABLE_PRINTER == 1)
+    intfs.disp_print_result           = __disp_print_result;
+#endif
 
     ai_ui_image_album_register(&intfs);
 }
