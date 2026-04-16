@@ -100,7 +100,6 @@ typedef enum {
     AI_UI_ACT_MAX
 } AI_UI_ACTION_E;
 
-#if defined(ENABLE_IMAGE_ALBUM) && (ENABLE_IMAGE_ALBUM == 1)
 #define AI_UI_BATCH_DELETE_NAME_LEN  64   /* matches ALBUM_FILENAME_MAX_LEN */
 #define AI_UI_BATCH_DELETE_MAX       8
 
@@ -108,7 +107,6 @@ typedef struct {
     uint32_t count;
     char     names[AI_UI_BATCH_DELETE_MAX][AI_UI_BATCH_DELETE_NAME_LEN + 1];
 } AI_UI_BATCH_DELETE_T;
-#endif
 
 typedef struct {
     char    *name;
@@ -118,16 +116,13 @@ typedef struct {
     uint32_t len;
 } AI_UI_IMG_T;
 
-#if defined(ENABLE_COMP_AI_VIDEO) && (ENABLE_COMP_AI_VIDEO == 1)
 typedef struct {
     uint16_t width;
     uint16_t height;
     uint8_t *yuv422;
     uint32_t len;
 } AI_UI_VIDEO_T;
-#endif
 
-#if defined(ENABLE_IMAGE_ALBUM) && (ENABLE_IMAGE_ALBUM == 1)
 typedef struct {
     void (*disp_open)(void);
     void (*disp_image)(AI_UI_IMG_T *img);
@@ -135,16 +130,13 @@ typedef struct {
     void (*disp_select_img_thumb_list)(AI_UI_IMG_T *item_arr, uint32_t arr_cnt, uint8_t select_num_max);
     void (*disp_close)(void);
 } AI_UI_ALBUM_INTFS_T;
-#endif
 
-#if defined(ENABLE_COMP_AI_VIDEO) && (ENABLE_COMP_AI_VIDEO == 1)
 typedef struct {
     void (*disp_open)(void);
     void (*disp_yuv_flush)(AI_UI_VIDEO_T *video);
     void (*disp_set_thumbnail_jpeg)(uint8_t *jpeg, uint32_t len);
     void (*disp_close)(void);
 } AI_UI_CAMERA_INTFS_T;
-#endif
 
 typedef void (*AI_UI_CHAT_LINK_CB)(void *arg);
 
