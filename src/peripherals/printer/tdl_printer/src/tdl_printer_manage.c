@@ -258,6 +258,13 @@ OPERATE_RET tdl_printer_open(TDL_PRINTER_HANDLE handle, TDL_PRINTER_OPEN_PARAM_T
 
     node->status = TDL_PRINTER_STATUS_INITED;
 
+    /* ESC/POS: send ESC @ to initialize printer to default state */
+    if (node->dev_info.protocol == TDD_PRINTER_PROTOCOL_ESCPOS &&
+        node->intfs.write != NULL) {
+        uint8_t esc_at[] = {0x1B, 0x40};
+        node->intfs.write(node->tdd_handle, esc_at, sizeof(esc_at));
+    }
+
     if (param != NULL && param->event_cb != NULL && node->intfs.get_status != NULL) {
         node->event_cb = param->event_cb;
         node->event_cb_arg = param->event_cb_arg;
@@ -358,6 +365,11 @@ OPERATE_RET tdl_printer_end(TDL_PRINTER_HANDLE handle)
     }
 
     if (NULL == node->intfs.end) {
+        /* ESC/POS drivers have no TDD end() hook — use the paper_feed
+         * abstraction to advance paper to the tear bar. */
+#if defined(PRINTER_TEAR_FEED_LINES) && (PRINTER_TEAR_FEED_LINES > 0)
+        tdl_printer_paper_feed(handle, PRINTER_TEAR_FEED_LINES);
+#endif
         return OPRT_NOT_SUPPORTED;
     }
 

@@ -46,4 +46,9 @@ if (ENABLE_PRINTER)
     config ENABLE_PRINTER_DP48
         bool "enable DP48A ESC/POS UART printer driver"
         default n
+
+    config PRINTER_TEAR_FEED_LINES
+        int "paper feed lines after each print job (tear-off strip)"
+        default 10
+        range 0 100
 endif
