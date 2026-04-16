@@ -110,8 +110,8 @@ extern "C" {
 #endif
 
 #if defined (TUYA_T5AI_BOARD_PRINTER_DP48) && (TUYA_T5AI_BOARD_PRINTER_DP48 ==1)
-#define BOARD_PRINTER_UART_PORT      TUYA_UART_NUM_2
-#define BOARD_PRINTER_UART_BAUDRATE  19200
+#define BOARD_PRINTER_UART_PORT      TUYA_UART_NUM_0
+#define BOARD_PRINTER_UART_BAUDRATE  9600
 #endif
 
 /***********************************************************
