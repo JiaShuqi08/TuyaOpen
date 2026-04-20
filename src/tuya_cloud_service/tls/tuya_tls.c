@@ -402,9 +402,16 @@ static OPERATE_RET mbedtls_cert_pkey_parse(tuya_tls_hander p_tls_handler)
     return OPRT_OK;
 }
 
-static int tuya_tls_ciphersuite_list[] = {MBEDTLS_TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256,
-                                          MBEDTLS_TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-                                          MBEDTLS_TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256, 0};
+/* Modern AEAD-only suite list. CBC mode dropped (no longer recommended) and
+ * ChaCha20-Poly1305 added so we negotiate one of the AEAD suites that every
+ * mainstream TLS 1.2 server supports. */
+static int tuya_tls_ciphersuite_list[] = {
+    MBEDTLS_TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+    MBEDTLS_TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,
+    MBEDTLS_TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+    MBEDTLS_TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
+    0,
+};
 
 /**
  * @brief Initializes the Tuya TLS module.
