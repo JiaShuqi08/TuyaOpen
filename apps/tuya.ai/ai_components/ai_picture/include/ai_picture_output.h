@@ -22,6 +22,10 @@ extern "C" {
 ***********************************************************/
 #define AI_PICTURE_OUTPUT_MAX_NUM 12
 
+#ifndef COMP_AI_PICTURE_DLD_MAX_FILE_SIZE
+#define COMP_AI_PICTURE_DLD_MAX_FILE_SIZE (2 * 1024 * 1024)
+#endif
+
 /***********************************************************
 ********************function declaration********************
 ***********************************************************/
@@ -42,6 +46,16 @@ OPERATE_RET ai_picture_output_set_size(uint16_t width, uint16_t height);
  * @return OPRT_OK on success
  */
 OPERATE_RET ai_picture_output_save_to_album(uint8_t *data, uint32_t len, uint32_t total_len);
+
+#if defined(ENABLE_COMP_AI_PICTURE_HOSTING_DLD) && (ENABLE_COMP_AI_PICTURE_HOSTING_DLD == 1)
+/**
+ * @brief Register file-storage download handler to receive cloud-pushed images.
+ *        Must be called after iot init (e.g. in pre_device_init).
+ *        Max file size is controlled by COMP_AI_PICTURE_DLD_MAX_FILE_SIZE (default 2MB).
+ * @return OPRT_OK on success
+ */
+OPERATE_RET ai_picture_output_dld_init(void);
+#endif
 
 #ifdef __cplusplus
 }

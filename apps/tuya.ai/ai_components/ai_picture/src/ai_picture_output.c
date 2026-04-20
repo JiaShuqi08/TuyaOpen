@@ -14,6 +14,10 @@
 
 #include "ai_picture_output.h"
 
+#if defined(ENABLE_COMP_AI_PICTURE_HOSTING_DLD) && (ENABLE_COMP_AI_PICTURE_HOSTING_DLD == 1)
+#include "tuya_file_storage_dld.h"
+#endif
+
 /***********************************************************
 ************************macro define************************
 ***********************************************************/
@@ -44,6 +48,7 @@ static AI_PICTURE_STREAM_T     sg_ai_pic_stream;
 /***********************************************************
 ***********************function define**********************
 ***********************************************************/
+extern IMAGE_ALBUM_HANDLE ai_picture_get_album_handle(void);
 
 /**
  * @brief Free partial JPEG accumulator and clear session state
@@ -163,7 +168,7 @@ OPERATE_RET ai_picture_output_save_to_album(uint8_t *data, uint32_t len, uint32_
         PR_NOTICE("[pic_chain] all chunks received, total:%u, saving to album", sg_ai_pic_stream.total_size);
         char name[AI_PICTURE_NAME_MAX_LEN + 1] = {0};
 
-        rt = ai_picture_save_to_album(sg_ai_pic_stream.acc_buf, sg_ai_pic_stream.total_size, name);
+        rt = ai_picture_save_to_album(sg_ai_pic_stream.acc_buf, sg_ai_pic_stream.total_size, NULL, name);
         if (rt != OPRT_OK) {
             PR_ERR("[pic_chain] save to album failed, rt:%d", rt);
         } else {
@@ -176,3 +181,114 @@ OPERATE_RET ai_picture_output_save_to_album(uint8_t *data, uint32_t len, uint32_
 
     return rt;
 }
+
+#if defined(ENABLE_COMP_AI_PICTURE_HOSTING_DLD) && (ENABLE_COMP_AI_PICTURE_HOSTING_DLD == 1)
+
+typedef struct {
+    uint8_t  *buf;
+    uint32_t  buf_capacity;
+    uint32_t  received_len;
+    char      cloud_name[AI_PICTURE_NAME_MAX_LEN + 1];
+} AI_PICTURE_DLD_FILE_T;
+
+static AI_PICTURE_DLD_FILE_T sg_dld_file;
+
+static OPERATE_RET __ai_picture_dld_notify(FILE_DL_NOTIFY_TYPE_E type, void *info, char **errmsg)
+{
+    switch (type) {
+    case FILE_DL_TYPE_START:
+        memset(&sg_dld_file, 0, sizeof(AI_PICTURE_DLD_FILE_T));
+        break;
+
+    case FILE_DL_TYPE_TRANS_START: {
+        FILE_DL_TRANS_START_INFO_T *ts = (FILE_DL_TRANS_START_INFO_T *)info;
+        memset(&sg_dld_file, 0, sizeof(AI_PICTURE_DLD_FILE_T));
+        if (ts && ts->file_name) {
+            strncpy(sg_dld_file.cloud_name, ts->file_name, AI_PICTURE_NAME_MAX_LEN);
+        }
+        sg_dld_file.buf = (uint8_t *)Malloc(COMP_AI_PICTURE_DLD_MAX_FILE_SIZE);
+        if (sg_dld_file.buf == NULL) {
+            PR_ERR("dld malloc failed, size:%u", COMP_AI_PICTURE_DLD_MAX_FILE_SIZE);
+            return OPRT_MALLOC_FAILED;
+        }
+        sg_dld_file.buf_capacity = COMP_AI_PICTURE_DLD_MAX_FILE_SIZE;
+        break;
+    }
+
+    case FILE_DL_TYPE_TRANS: {
+        FILE_DL_TRANS_INFO_T *t = (FILE_DL_TRANS_INFO_T *)info;
+        if (!t || !t->data || t->len == 0 || !sg_dld_file.buf) {
+            break;
+        }
+        if (sg_dld_file.received_len + t->len > sg_dld_file.buf_capacity) {
+            PR_ERR("dld overflow: received=%u chunk=%u cap=%u",
+                   sg_dld_file.received_len, t->len, sg_dld_file.buf_capacity);
+            return OPRT_BUFFER_NOT_ENOUGH;
+        }
+        memcpy(sg_dld_file.buf + sg_dld_file.received_len, t->data, t->len);
+        sg_dld_file.received_len += t->len;
+        break;
+    }
+
+    case FILE_DL_TYPE_TRANS_END: {
+        FILE_DL_TRANS_END_INFO_T *te = (FILE_DL_TRANS_END_INFO_T *)info;
+        if (te && te->ret == 0 && sg_dld_file.buf && sg_dld_file.received_len > 0) {
+            char saved_name[AI_PICTURE_NAME_MAX_LEN + 1] = {0};
+            OPERATE_RET rt = ai_picture_save_to_album(sg_dld_file.buf, sg_dld_file.received_len,
+                                                      sg_dld_file.cloud_name[0] ? sg_dld_file.cloud_name : NULL,
+                                                      saved_name);
+            if (rt != OPRT_OK) {
+                PR_ERR("dld save to album failed, rt:%d", rt);
+            } else {
+                ai_user_event_notify(AI_USER_EVT_ACCEPT_PICTURE, saved_name);
+            }
+        }
+        if (sg_dld_file.buf) {
+            Free(sg_dld_file.buf);
+        }
+        memset(&sg_dld_file, 0, sizeof(AI_PICTURE_DLD_FILE_T));
+        break;
+    }
+
+    case FILE_DL_TYPE_END:
+        break;
+
+    case FILE_DL_TYPE_QUERY: {
+        FILE_DL_QUERY_DEL_INFO_T *qd = (FILE_DL_QUERY_DEL_INFO_T *)info;
+        if (qd) {
+            tuya_file_storage_dl_mq_rept(NULL, qd->file_name, NULL, "query");
+        }
+        break;
+    }
+
+    case FILE_DL_TYPE_DELETE: {
+        FILE_DL_QUERY_DEL_INFO_T *qd = (FILE_DL_QUERY_DEL_INFO_T *)info;
+        if (qd) {
+            image_album_delete(ai_picture_get_album_handle(), qd->file_name);
+            tuya_file_storage_dl_mq_rept(NULL, qd->file_name, NULL, "delete");
+        }
+        break;
+    }
+
+    default:
+        break;
+    }
+    return OPRT_OK;
+}
+
+OPERATE_RET ai_picture_output_dld_init(void)
+{
+    FILE_DL_CONFIG_CB_T cfg;
+    memset(&cfg, 0, sizeof(FILE_DL_CONFIG_CB_T));
+    snprintf(cfg.resolution, sizeof(cfg.resolution), "%d*%d",
+             COMP_AI_PICTURE_DEF_OUTPIUT_WIDTH, COMP_AI_PICTURE_DEF_OUTPIUT_HEIGHT);
+    strncpy(cfg.allow_formats[0], "jpg", sizeof(cfg.allow_formats[0]) - 1);
+    cfg.max_per_file_size = COMP_AI_PICTURE_DLD_MAX_FILE_SIZE;
+    cfg.max_file_cnt      = COMP_AI_PICTURE_DLD_MAX_FILE_CNT;
+    cfg.unit_size         = COMP_AI_PICTURE_DLD_UNIT_SIZE;
+    cfg.notify_cb         = __ai_picture_dld_notify;
+
+    return tuya_file_storage_dl_set_config(cfg);
+}
+
+#endif /* ENABLE_COMP_AI_PICTURE_HOSTING_DLD */

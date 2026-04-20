@@ -88,7 +88,7 @@ static OPERATE_RET __take_photo(const MCP_PROPERTY_LIST_T *properties, MCP_RETUR
 
 #if defined(ENABLE_COMP_AI_PICTURE) && (ENABLE_COMP_AI_PICTURE == 1)
     char name[AI_PICTURE_NAME_MAX_LEN + 1] = {0};
-    ai_picture_save_to_album(image_data, image_size, name);
+    ai_picture_save_to_album(image_data, image_size, NULL, name);
 
 #if defined(ENABLE_COMP_AI_DISPLAY) && (ENABLE_COMP_AI_DISPLAY == 1)
     ai_ui_disp_msg(AI_UI_DISP_USER_IMAGE_LINK, (uint8_t *)name, strlen(name)+1);

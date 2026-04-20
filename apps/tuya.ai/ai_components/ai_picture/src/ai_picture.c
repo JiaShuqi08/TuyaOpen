@@ -83,8 +83,12 @@ OPERATE_RET ai_picture_init(void)
                                           &album_init, 
                                           &sg_picture_ctx.album_hdl));
 
-    TUYA_CALL_ERR_LOG(ai_picture_output_set_size(COMP_AI_PICTURE_DEF_OUTPIUT_WIDTH, 
+    TUYA_CALL_ERR_LOG(ai_picture_output_set_size(COMP_AI_PICTURE_DEF_OUTPIUT_WIDTH,
                                                  COMP_AI_PICTURE_DEF_OUTPIUT_HEIGHT));
+
+#if defined(ENABLE_COMP_AI_PICTURE_HOSTING_DLD) && (ENABLE_COMP_AI_PICTURE_HOSTING_DLD == 1)
+    TUYA_CALL_ERR_LOG(ai_picture_output_dld_init());
+#endif
 
     return rt;
 }
@@ -105,7 +109,7 @@ IMAGE_ALBUM_HANDLE ai_picture_get_album_handle(void)
  * @param[out] name filled with the generated filename (may be NULL)
  * @return OPRT_OK on success
  */
-OPERATE_RET ai_picture_save_to_album(uint8_t *picture, uint32_t len, char name[AI_PICTURE_NAME_MAX_LEN + 1])
+OPERATE_RET ai_picture_save_to_album(uint8_t *picture, uint32_t len, const char *in_name, char name[AI_PICTURE_NAME_MAX_LEN + 1])
 {
     OPERATE_RET        rt           = OPRT_OK;
     IMAGE_ALBUM_HANDLE album_handle = ai_picture_get_album_handle();
@@ -120,9 +124,13 @@ OPERATE_RET ai_picture_save_to_album(uint8_t *picture, uint32_t len, char name[A
         return OPRT_INVALID_PARM;
     }
 
+    SYS_TICK_T timestamp                       = tal_time_get_posix_ms();
     char       filename[AI_PICTURE_NAME_MAX_LEN + 1] = {0};
-    SYS_TICK_T timestamp                             = tal_time_get_posix_ms();
-    snprintf(filename, sizeof(filename), "ai_pic_%llu", timestamp);
+    if (in_name && in_name[0] != '\0') {
+        strncpy(filename, in_name, AI_PICTURE_NAME_MAX_LEN);
+    } else {
+        snprintf(filename, sizeof(filename), "ai_pic_%llu", timestamp);
+    }
 
     ALBUM_IMAGE_SAVE_INFO_T info = {
         .filename  = filename,

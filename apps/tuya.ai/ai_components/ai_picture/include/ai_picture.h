@@ -63,10 +63,11 @@ OPERATE_RET ai_picture_init(void);
  * @brief Save a JPEG picture to the album
  * @param[in] picture JPEG data buffer
  * @param[in] len JPEG data length in bytes
- * @param[out] name filled with the generated filename (may be NULL)
+ * @param[in] in_name desired filename; NULL or empty string to auto-generate a timestamp-based name
+ * @param[out] name filled with the actual filename used (may be NULL)
  * @return OPRT_OK on success
  */
-OPERATE_RET ai_picture_save_to_album(uint8_t *picture, uint32_t len, char name[AI_PICTURE_NAME_MAX_LEN + 1]);
+OPERATE_RET ai_picture_save_to_album(uint8_t *picture, uint32_t len, const char *in_name, char name[AI_PICTURE_NAME_MAX_LEN + 1]);
 
 
 char *ai_picture_get_album_name(void);
