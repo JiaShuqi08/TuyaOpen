@@ -627,12 +627,30 @@ OPERATE_RET tal_image_jpeg_decode_bitmap(const uint8_t *jpeg_data,
     uint8_t *bmp = out->out_buf;
     memset(bmp, 0, bmp_need);
 
+    /*
+     * JPEG DCT quantization introduces ±15-20 noise on flat (white/black)
+     * regions. Without clamping, these near-white pixels (e.g. 238 instead of
+     * 255) carry a small negative error that Floyd-Steinberg diffuses to
+     * neighbours; the accumulated error eventually flips a pixel black,
+     * producing visible dot rows on what should be a clean white background.
+     * Snap clearly-white / clearly-black pixels to their extremes first so the
+     * dithering error is zero and cannot scatter dots.
+     */
+    int16_t white_clamp = thr + (255 - thr) / 3;  /* ~85 % of way to white */
+    int16_t black_clamp = thr / 3;                 /* ~33 % of way to black */
+
     for (uint16_t y = 0; y < h; y++) {
         uint8_t *row  = gray_buf + (uint32_t)y * w;
         uint8_t *orow = bmp + (uint32_t)y * bytes_per_line;
 
         for (uint16_t x = 0; x < w; x++) {
             int16_t old_px = (int16_t)row[x];
+            /* Clamp near-white / near-black to absorb JPEG quantization noise */
+            if (old_px >= white_clamp) {
+                old_px = 255;
+            } else if (old_px <= black_clamp) {
+                old_px = 0;
+            }
             uint8_t new_px = (old_px < thr) ? 0 : 255;
             int16_t err    = old_px - (int16_t)new_px;
 

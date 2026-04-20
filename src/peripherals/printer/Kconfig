@@ -49,6 +49,6 @@ if (ENABLE_PRINTER)
 
     config PRINTER_TEAR_FEED_LINES
         int "paper feed lines after each print job (tear-off strip)"
-        default 10
-        range 0 100
+        default 50
+        range 0 5000
 endif
