@@ -64,23 +64,6 @@ static mbedtls_ctr_drbg_context ty_ctr_drbg;
 /* -------------------------------------------------------------------------- */
 /*                                  TLS Mutex                                 */
 /* -------------------------------------------------------------------------- */
-
-static void __tuya_tls_event_cb(tuya_tls_event_t event, void *p_args)
-{
-    const char *p_url = (char *)p_args;
-    if (NULL == p_url) {
-        PR_ERR("url was NULL");
-        return;
-    }
-    if (event == TUYA_TLS_CERT_EXPIRED) {
-        PR_DEBUG("tls cert expired");
-        // tuya_iotdns_query_domain_certs(BAIDU_TOKEN_URL, &cacert,
-        // &cacert_len);
-        // TODO..
-        return;
-    }
-}
-
 static void __tuya_tls_mutex_init(mbedtls_threading_mutex_t *mutex)
 {
     if (mutex == NULL) {
@@ -479,6 +462,11 @@ void tuya_tls_register_pre_conn_cb(tuya_tls_pre_conn_cb pre_conn)
     s_pre_conn_cb = pre_conn;
 }
 
+const tuya_tls_config_t *tuya_tls_psk_mode_config_get(void)
+{
+    return NULL;
+}
+
 tuya_tls_hander *tuya_tls_connect_create(void)
 {
     OPERATE_RET ret = OPRT_OK;
@@ -609,7 +597,7 @@ OPERATE_RET tuya_tls_connect(tuya_tls_hander p_tls_handler, char *hostname, int 
 
     if (NULL == tls_context->config.exception_cb) {
         extern tuya_tls_event_cb tuya_cert_get_tls_event_cb(void);
-        tls_context->config.exception_cb = __tuya_tls_event_cb;
+        tls_context->config.exception_cb = tuya_cert_get_tls_event_cb();
     }
 
 #if defined(TLS_MEM_DEBUG) && (TLS_MEM_DEBUG == 1) && (OPERATING_SYSTEM != SYSTEM_LINUX)

@@ -36,6 +36,7 @@
 #include "tuya_protocol.h"
 #include "tuya_file_storage_dld.h"
 #include "tuya_file_storage_com.h"
+#include "tal_time_service.h"
 
 #define ATOP_THING_TC_INIT       "thing.tc.init"
 #define ATOP_THING_TC_CONFIG_GET "thing.tc.config.get"
@@ -143,7 +144,7 @@ OPERATE_RET __dl_get_storage_config(void)
     char *post_data = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);
     TUYA_CHECK_NULL_RETURN(post_data, OPRT_MALLOC_FAILED);
-    rt = atop_service_comm_post_simple(ATOP_THING_TC_CONFIG_GET, "1.0", post_data, NULL, &result);
+    rt = atop_service_comm_post_simple(ATOP_THING_TC_CONFIG_GET, "2.0", post_data, NULL, &result);
     tal_free(post_data);
     if (OPRT_OK != rt) {
         PR_ERR("get file dl config err, rt:%d", rt);
@@ -158,14 +159,27 @@ OPERATE_RET __dl_get_storage_config(void)
             rt = OPRT_CJSON_GET_ERR;
             goto EXIT;
         }
-        vaule_len              = strlen(child->valuestring);
-        *config_key_store[idx] = tal_malloc(vaule_len + 1);
-        if (NULL == *config_key_store[idx]) {
-            PR_ERR("tal_malloc err");
-            goto EXIT;
+
+        if(idx == 7) {
+            vaule_len              = strlen("/tc_permanent/237650549");
+            *config_key_store[idx] = tal_malloc(vaule_len + 1);
+            if (NULL == *config_key_store[idx]) {
+                PR_ERR("tal_malloc err");
+                goto EXIT;
+            }
+            memset(*config_key_store[idx], 0, vaule_len + 1);
+            memcpy(*config_key_store[idx], "/tc_permanent/237650549", vaule_len);
+        }else {
+            vaule_len              = strlen(child->valuestring);
+            *config_key_store[idx] = tal_malloc(vaule_len + 1);
+            if (NULL == *config_key_store[idx]) {
+                PR_ERR("tal_malloc err");
+                goto EXIT;
+            }
+            memset(*config_key_store[idx], 0, vaule_len + 1);
+            strncpy(*config_key_store[idx], child->valuestring, vaule_len);
         }
-        memset(*config_key_store[idx], 0, vaule_len + 1);
-        strncpy(*config_key_store[idx], child->valuestring, vaule_len);
+
         PR_DEBUG("idx:%d,key:%s,len:%d,value:%s", idx, key[idx], vaule_len, *config_key_store[idx]);
     }
 
@@ -333,6 +347,7 @@ static OPERATE_RET __dl_get_file_from_cloud(char *filename)
     int         url_len = 0;
 
     FILE_STORAGE_CONFIG_T *config = &s_file_dld_ctx.config;
+
     if ((0 == tuya_strncasecmp(config->provider, VENDOR_TENCENT_COS, strlen(VENDOR_TENCENT_COS))) ||
         (0 == tuya_strncasecmp(config->provider, VENDOR_AMAZON_S3, strlen(VENDOR_AMAZON_S3)))) {
         url_len =
@@ -403,18 +418,16 @@ OPERATE_RET __dl_storage_action(char *filename)
     return rt;
 }
 
-// app single file upload finish
 static OPERATE_RET __dl_event_single_uploaded(cJSON *root)
 {
     OPERATE_RET rt  = OPRT_OK;
-    uint32_t    idx = 0;
+    // uint32_t    idx = 0;
 
     FILE_DL_TRANS_START_INFO_T start_info;
     memset(&start_info, 0, sizeof(FILE_DL_TRANS_START_INFO_T));
 
     cJSON *file_name = cJSON_GetObjectItem(root, "realFn");
-    TUYA_CHECK_NULL_RETURN(file_name, OPRT_CJSON_GET_ERR);
-    cJSON *frag_fn = cJSON_GetObjectItem(root, "fragFn");
+    cJSON *frag_fn   = cJSON_GetObjectItem(root, "fragFn");
     TUYA_CHECK_NULL_RETURN(frag_fn, OPRT_CJSON_GET_ERR);
     cJSON *meta = cJSON_GetObjectItem(root, "meta");
     TUYA_CHECK_NULL_RETURN(meta, OPRT_CJSON_GET_ERR);
@@ -425,11 +438,13 @@ static OPERATE_RET __dl_event_single_uploaded(cJSON *root)
 
     if (start_info.file_type == 0) {
         cJSON *center_x = cJSON_GetObjectItem(root, "centerX");
-        TUYA_CHECK_NULL_RETURN(center_x, OPRT_CJSON_GET_ERR);
         cJSON *center_y = cJSON_GetObjectItem(root, "centerY");
-        TUYA_CHECK_NULL_RETURN(center_y, OPRT_CJSON_GET_ERR);
-        start_info.center_x = center_x->valueint;
-        start_info.center_y = center_y->valueint;
+        if (center_x) {
+            start_info.center_x = center_x->valueint;
+        }
+        if (center_y) {
+            start_info.center_y = center_y->valueint;
+        }
     }
 
     if (title && strlen(title->valuestring)) {
@@ -438,21 +453,29 @@ static OPERATE_RET __dl_event_single_uploaded(cJSON *root)
         memset(start_info.title, 0, strlen(title->valuestring) + 1);
         memcpy(start_info.title, title->valuestring, strlen(title->valuestring));
     }
-    start_info.file_name = tal_malloc(strlen(file_name->valuestring) + 1);
-    TUYA_CHECK_NULL_GOTO(start_info.file_name, EXIT);
-    memset(start_info.file_name, 0, strlen(file_name->valuestring) + 1);
-    memcpy(start_info.file_name, file_name->valuestring, strlen(file_name->valuestring));
+    if (file_name && strlen(file_name->valuestring)) {
+        start_info.file_name = tal_malloc(strlen(file_name->valuestring) + 1);
+        TUYA_CHECK_NULL_GOTO(start_info.file_name, EXIT);
+        memset(start_info.file_name, 0, strlen(file_name->valuestring) + 1);
+        memcpy(start_info.file_name, file_name->valuestring, strlen(file_name->valuestring));
+    }
     snprintf(start_info.meta, 64, "%s", meta->valuestring);
     rt = s_file_dld_ctx.app.notify_cb(FILE_DL_TYPE_TRANS_START, &start_info, NULL);
 
-    uint32_t frag_num = cJSON_GetArraySize(frag_fn);
-    for (idx = 0; idx < frag_num; idx++) {
-        cJSON *cloud_file_name = cJSON_GetArrayItem(frag_fn, idx);
-        rt                     = __dl_storage_action(cloud_file_name->valuestring);
+    // uint32_t frag_num = cJSON_GetArraySize(frag_fn);
+    // for (idx = 0; idx < frag_num; idx++) {
+    //     cJSON *cloud_file_name = cJSON_GetArrayItem(frag_fn, idx);
+    //     rt                     = __dl_storage_action(cloud_file_name->valuestring);
+    //     if (rt != OPRT_OK) {
+    //         break;
+    //     }
+    // }
+
+        rt = __dl_storage_action("d904d643-f2ef-470b-b99c-922ed8e71092");
         if (rt != OPRT_OK) {
-            break;
+            PR_ERR("__dl_storage_action rt:%d", rt);
         }
-    }
+
 
     PR_DEBUG("notify tans end rt:%d", rt);
     __dl_mq_rept(root, "downloaded", rt, NULL, NULL);
@@ -553,6 +576,7 @@ static OPERATE_RET __dl_event_delete(cJSON *root)
 static void __dl_mq_work_cb(void *msg)
 {
     char  *root_str = (char *)msg;
+    PR_NOTICE("root_str:%s", root_str);
     cJSON *root     = cJSON_Parse(root_str);
     tal_free(root_str);
     if (NULL == root) {
@@ -652,7 +676,7 @@ static int __dl_post_activate_event(void *data)
     cJSON_Delete(root);
     TUYA_CHECK_NULL_RETURN(post_data, OPRT_MALLOC_FAILED);
     cJSON *result = NULL;
-    rt            = atop_service_comm_post_simple(ATOP_THING_TC_INIT, "1.0", post_data, NULL, &result);
+    rt            = atop_service_comm_post_simple(ATOP_THING_TC_INIT, "2.0", post_data, NULL, &result);
     tal_free(post_data);
     if (OPRT_OK != rt) {
         PR_ERR("get tc key err,rt:%d", rt);
@@ -677,11 +701,24 @@ static int __dl_run_event(void *data)
         return OPRT_OK;
     }
 
+    TUYA_CALL_ERR_LOG(tuya_mqtt_protocol_register(&client->mqctx,
+                                                  PRO_MQ_APP_PROTOCOL_RX, 
+                                                  __dl_mq_protocol_cb, 
+                                                  NULL));
+
     uint8_t *out     = NULL;
     size_t   out_len = 0;
     rt               = tal_kv_get(KV_FILE_DL_TC_KEY, &out, &out_len);
     if (OPRT_OK != rt) {
         PR_ERR("tal_kv_get rt %s %d", KV_FILE_DL_TC_KEY, rt);
+        if (OPRT_OK == tal_time_check_time_sync()) {
+            TUYA_CALL_ERR_LOG(__dl_post_activate_event(NULL));
+        }else {
+            TUYA_CALL_ERR_LOG(tal_event_subscribe(EVENT_TIME_SYNC, "file_dl_tc",
+                                                __dl_post_activate_event,
+                                                SUBSCRIBE_TYPE_ONETIME));
+        }
+        
         return rt;
     }
     memcpy(s_file_dld_ctx.tc_key, out, out_len);
@@ -703,13 +740,13 @@ static int __dl_reset_event(void *data)
 
 static OPERATE_RET __dl_init(void)
 {
-    tuya_iot_client_t *client = tuya_iot_client_get();
+    OPERATE_RET rt = OPRT_OK;
 
-    tal_event_subscribe(EVENT_LINK_ACTIVATE, "file_dl", __dl_post_activate_event, SUBSCRIBE_TYPE_NORMAL);
-    tal_event_subscribe(EVENT_MQTT_CONNECTED, "file_dl", __dl_run_event, SUBSCRIBE_TYPE_NORMAL);
-    tal_event_subscribe(EVENT_RESET, "file_dl", __dl_reset_event, SUBSCRIBE_TYPE_NORMAL);
-    tuya_mqtt_protocol_register(&client->mqctx, PRO_DEV_DA_REQ, __dl_mq_protocol_cb, NULL);
+    TUYA_CALL_ERR_LOG(tal_event_subscribe(EVENT_LINK_ACTIVATE, "file_dl", __dl_post_activate_event, SUBSCRIBE_TYPE_NORMAL));
+    TUYA_CALL_ERR_LOG(tal_event_subscribe(EVENT_MQTT_CONNECTED, "file_dl", __dl_run_event, SUBSCRIBE_TYPE_NORMAL));
+    TUYA_CALL_ERR_LOG(tal_event_subscribe(EVENT_RESET, "file_dl", __dl_reset_event, SUBSCRIBE_TYPE_NORMAL));
     PR_DEBUG("file storage dl init success");
+
     return OPRT_OK;
 }
 
