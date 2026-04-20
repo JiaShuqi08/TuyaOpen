@@ -55,6 +55,7 @@ extern "C" {
 #define SELECT_TEXT "选择"
 #define DELETE_TEXT "删除"
 #define CONFIRM_TEXT "确认"
+#define RECOGNIZE_IMAGE_PROMPT "请解释上传图片的内容，不要触发MCP技能，不要调用MCP工具"
 
 #ifdef __cplusplus
 }

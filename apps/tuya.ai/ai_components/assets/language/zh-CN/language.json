@@ -51,6 +51,7 @@
         "ALL_PHOTOS":"所有照片",
         "SELECT_TEXT":"选择",
         "DELETE_TEXT":"删除",
-        "CONFIRM_TEXT":"确认"
+        "CONFIRM_TEXT":"确认",
+        "RECOGNIZE_IMAGE_PROMPT":"请解释上传图片的内容，不要触发MCP技能，不要调用MCP工具"
     }
 }
