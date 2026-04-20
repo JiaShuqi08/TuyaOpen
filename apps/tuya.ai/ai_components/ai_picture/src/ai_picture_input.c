@@ -8,6 +8,7 @@
  */
 #include "string.h"
 #include "tal_api.h"
+#include "lang_config.h"
 #include "tuya_ai_agent.h"
 #include "ai_user_event.h"
 #include "ai_agent.h"
@@ -195,15 +196,16 @@ uint32_t ai_picture_input_get_num(void)
 OPERATE_RET ai_picture_input_recognize(uint8_t *data, uint32_t len)
 {
     OPERATE_RET rt   = OPRT_OK;
-    char       *text = "explain the content of the uploaded image, do not trigger MCP skills, do not call MCP tools";
+    uint64_t   timestamp = tal_system_get_millisecond();
+    char       *text = RECOGNIZE_IMAGE_PROMPT;
 
     if (NULL == data || 0 == len) {
         return OPRT_INVALID_PARM;
     }
 
     tuya_ai_input_start(TRUE);
-    TUYA_CALL_ERR_LOG(ai_agent_send_image((uint8_t *)data, len));
-    TUYA_CALL_ERR_LOG(ai_agent_send_text(text));
+    TUYA_CALL_ERR_RETURN(tuya_ai_image_input(timestamp, (uint8_t *)data, len, len));
+    TUYA_CALL_ERR_RETURN(tuya_ai_text_input((uint8_t *)text, strlen(text), strlen(text)));
     tuya_ai_input_stop();
 
     return rt;
