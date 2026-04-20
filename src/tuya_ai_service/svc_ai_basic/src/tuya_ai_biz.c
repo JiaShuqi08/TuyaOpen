@@ -830,7 +830,7 @@ OPERATE_RET __ai_parse_event_attr(CHAR_T *de_buf, UINT_T attr_len, AI_EVENT_ATTR
             PR_ERR("unknow attr type:%d", attr.type);
         }
     }
-    if ((NULL == event->event_id) || (NULL == event->session_id)) {
+    if ((0 == event->event_id[0]) || (0 == event->session_id[0])) {
         PR_ERR("event id or session id is null");
         return OPRT_INVALID_PARM;
     }
