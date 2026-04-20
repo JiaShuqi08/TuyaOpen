@@ -152,6 +152,9 @@ typedef struct {
     void (*disp_link)(bool is_ai, char *text, AI_UI_CHAT_LINK_CB cb, void *cb_arg, uint32_t len);
     void (*disp_add_chat_attch_img)(AI_UI_IMG_T *img);
     void (*disp_clear_chat_attach)(void);
+#if defined(ENABLE_PRINTER) && (ENABLE_PRINTER == 1)
+    void (*disp_print_result)(bool ok);
+#endif
 } AI_UI_CHAT_INTFS_T;
 
 typedef struct {

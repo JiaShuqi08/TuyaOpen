@@ -32,6 +32,9 @@ LV_IMG_DECLARE(icon_camera_app);
 LV_IMG_DECLARE(icon_photo_app);
 LV_IMG_DECLARE(icon_add_img);
 #endif
+#if defined(ENABLE_PRINTER) && (ENABLE_PRINTER == 1)
+LV_IMG_DECLARE(icon_printer_app);
+#endif
 
 /***********************************************************
 ************************macro define************************
@@ -75,6 +78,12 @@ typedef struct {
     lv_obj_t *picture_action_bar;
     lv_obj_t *picture_print_btn;
     lv_obj_t *picture_attach_btn;
+#if defined(ENABLE_PRINTER) && (ENABLE_PRINTER == 1)
+    lv_obj_t   *picture_print_overlay;
+    lv_obj_t   *picture_print_status_label;
+    lv_obj_t   *picture_print_btn_row;
+    lv_timer_t *picture_print_result_tm;
+#endif
 } AI_UI_WECHAT_CHAT_T;
 
 
@@ -215,28 +224,76 @@ static lv_obj_t *__create_user_msg_label(lv_obj_t *parent, char *text)
 /* ── picture view event callbacks ── */
 
 #if defined(ENABLE_PRINTER) && (ENABLE_PRINTER == 1)
-static void __picture_print_btn_cb(lv_event_t *e)
+static void __picture_print_result_timeout_cb(lv_timer_t *timer)
 {
-    (void)e;
-    if (sg_chat.cur_img_name[0] == '\0') {
-        return;
-    }
+    (void)timer;
+    lv_timer_del(sg_chat.picture_print_result_tm);
+    sg_chat.picture_print_result_tm = NULL;
+    lv_obj_add_flag(sg_chat.picture_print_overlay, LV_OBJ_FLAG_HIDDEN);
+    lv_label_set_text(sg_chat.picture_print_status_label, PRINT_IMAGE);
+    lv_obj_clear_flag(sg_chat.picture_print_btn_row, LV_OBJ_FLAG_HIDDEN);
+}
+
+static void __picture_print_cancel_btn_cb(lv_event_t *e)
+{
+    lv_event_stop_bubbling(e);
+    lv_obj_add_flag(sg_chat.picture_print_overlay, LV_OBJ_FLAG_HIDDEN);
+}
+
+static void __picture_print_confirm_btn_cb(lv_event_t *e)
+{
+    lv_event_stop_bubbling(e);
+    lv_label_set_text(sg_chat.picture_print_status_label, PRINTING);
+    lv_obj_add_flag(sg_chat.picture_print_btn_row, LV_OBJ_FLAG_HIDDEN);
     ai_ui_notify_action(AI_UI_ACT_PRINT_IMG,
                         (uint8_t *)sg_chat.cur_img_name,
                         (uint32_t)strlen(sg_chat.cur_img_name));
+}
+
+static void __picture_disp_print_result(bool ok)
+{
+    lv_vendor_disp_lock();
+    lv_label_set_text(sg_chat.picture_print_status_label,
+                      ok ? PRINT_SUCCESS : PRINT_FAILED);
+    if (sg_chat.picture_print_result_tm == NULL) {
+        sg_chat.picture_print_result_tm =
+            lv_timer_create(__picture_print_result_timeout_cb, 2000, NULL);
+    } else {
+        lv_timer_reset(sg_chat.picture_print_result_tm);
+    }
+    lv_vendor_disp_unlock();
+}
+
+static void __picture_print_btn_cb(lv_event_t *e)
+{
+    PR_NOTICE("picture: print btn clicked, cur_img='%s'", sg_chat.cur_img_name);
+    lv_event_stop_bubbling(e);
+    if (sg_chat.cur_img_name[0] == '\0') {
+        PR_NOTICE("picture: print btn — no image name, abort");
+        return;
+    }
+    lv_obj_clear_flag(sg_chat.picture_print_overlay, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_move_foreground(sg_chat.picture_print_overlay);
 }
 #endif
 
 #if defined(ENABLE_IMAGE_ALBUM) && (ENABLE_IMAGE_ALBUM == 1)
 static void __picture_attach_btn_cb(lv_event_t *e)
 {
-    (void)e;
+    PR_NOTICE("picture: attach btn clicked, cur_img='%s'", sg_chat.cur_img_name);
+    lv_event_stop_bubbling(e);
     if (sg_chat.cur_img_name[0] == '\0') {
+        PR_NOTICE("picture: attach btn — no image name, abort");
         return;
     }
     ai_ui_notify_action(AI_UI_ACT_ADD_IMG_ATTACH,
                         (uint8_t *)sg_chat.cur_img_name,
                         (uint32_t)strlen(sg_chat.cur_img_name));
+    /* Return to chat so the attach bar update is visible */
+    lv_obj_add_flag(sg_chat.picture, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_clear_flag(sg_chat.content, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_clear_flag(sg_chat.plus_btn, LV_OBJ_FLAG_HIDDEN);
+    sg_chat.cur_img_name[0] = '\0';
 }
 #endif
 
@@ -245,6 +302,8 @@ static void __picture_attach_btn_cb(lv_event_t *e)
  */
 static void __return_chat_content_event_cb(lv_event_t *e)
 {
+    PR_NOTICE("picture: return_chat triggered, target=%p picture=%p",
+              lv_event_get_target(e), sg_chat.picture);
     lv_obj_add_flag(sg_chat.picture, LV_OBJ_FLAG_HIDDEN);
     lv_obj_clear_flag(sg_chat.content, LV_OBJ_FLAG_HIDDEN);
     lv_obj_clear_flag(sg_chat.plus_btn, LV_OBJ_FLAG_HIDDEN);
@@ -523,6 +582,7 @@ static void __ui_disp_image(AI_UI_IMG_T *img)
     } else {
         sg_chat.cur_img_name[0] = '\0';
     }
+    PR_NOTICE("picture: disp_image name='%s'", sg_chat.cur_img_name);
 
     TAL_IMAGE_JPEG_INFO_T info = {0};
 
@@ -555,12 +615,131 @@ static void __ui_disp_image(AI_UI_IMG_T *img)
     if (NULL == sg_chat.picture_canvas) {
         sg_chat.picture_canvas = lv_canvas_create(sg_chat.picture);
         lv_obj_set_size(sg_chat.picture_canvas, LV_HOR_RES, LV_VER_RES);
-        lv_obj_add_flag(sg_chat.picture_canvas, LV_OBJ_FLAG_CLICKABLE);
-        lv_obj_add_event_cb(sg_chat.picture_canvas, __return_chat_content_event_cb, LV_EVENT_CLICKED, NULL);
     }
 
     lv_canvas_set_buffer(sg_chat.picture_canvas, rgb565_buf,
                          info.width, info.height, LV_COLOR_FORMAT_RGB565);
+
+    /* Create action bar lazily AFTER the canvas so it is always on top (higher z-order). */
+    if (NULL == sg_chat.picture_action_bar) {
+        PR_NOTICE("picture: creating action bar (first show)");
+        sg_chat.picture_action_bar = lv_obj_create(sg_chat.picture);
+        lv_obj_set_size(sg_chat.picture_action_bar, 44, 84);
+        lv_obj_align(sg_chat.picture_action_bar, LV_ALIGN_RIGHT_MID, -8, 0);
+        lv_obj_set_style_bg_color(sg_chat.picture_action_bar, lv_color_black(), 0);
+        lv_obj_set_style_bg_opa(sg_chat.picture_action_bar, 140, 0);
+        lv_obj_set_style_radius(sg_chat.picture_action_bar, 18, 0);
+        lv_obj_set_style_border_width(sg_chat.picture_action_bar, 0, 0);
+        lv_obj_set_style_pad_all(sg_chat.picture_action_bar, 0, 0);
+        lv_obj_clear_flag(sg_chat.picture_action_bar, LV_OBJ_FLAG_SCROLLABLE);
+
+#if defined(ENABLE_PRINTER) && (ENABLE_PRINTER == 1)
+        sg_chat.picture_print_btn = lv_obj_create(sg_chat.picture_action_bar);
+        lv_obj_set_size(sg_chat.picture_print_btn, 40, 40);
+        lv_obj_align(sg_chat.picture_print_btn, LV_ALIGN_TOP_MID, 0, 2);
+        lv_obj_set_style_bg_opa(sg_chat.picture_print_btn, LV_OPA_TRANSP, 0);
+        lv_obj_set_style_border_width(sg_chat.picture_print_btn, 0, 0);
+        lv_obj_set_style_pad_all(sg_chat.picture_print_btn, 0, 0);
+        lv_obj_set_style_radius(sg_chat.picture_print_btn, 0, 0);
+        lv_obj_clear_flag(sg_chat.picture_print_btn, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_add_flag(sg_chat.picture_print_btn, LV_OBJ_FLAG_CLICKABLE);
+
+        lv_obj_t *print_icon = lv_img_create(sg_chat.picture_print_btn);
+        lv_img_set_src(print_icon, &icon_printer_app);
+        lv_obj_set_style_img_recolor(print_icon, lv_color_white(), 0);
+        lv_obj_set_style_img_recolor_opa(print_icon, LV_OPA_COVER, 0);
+        lv_obj_center(print_icon);
+
+        lv_obj_add_event_cb(sg_chat.picture_print_btn, __picture_print_btn_cb, LV_EVENT_CLICKED, NULL);
+#endif /* ENABLE_PRINTER */
+
+#if defined(ENABLE_IMAGE_ALBUM) && (ENABLE_IMAGE_ALBUM == 1)
+        sg_chat.picture_attach_btn = lv_obj_create(sg_chat.picture_action_bar);
+        lv_obj_set_size(sg_chat.picture_attach_btn, 40, 40);
+        lv_obj_align(sg_chat.picture_attach_btn, LV_ALIGN_BOTTOM_MID, 0, -2);
+        lv_obj_set_style_bg_opa(sg_chat.picture_attach_btn, LV_OPA_TRANSP, 0);
+        lv_obj_set_style_border_width(sg_chat.picture_attach_btn, 0, 0);
+        lv_obj_set_style_pad_all(sg_chat.picture_attach_btn, 0, 0);
+        lv_obj_set_style_radius(sg_chat.picture_attach_btn, 0, 0);
+        lv_obj_clear_flag(sg_chat.picture_attach_btn, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_add_flag(sg_chat.picture_attach_btn, LV_OBJ_FLAG_CLICKABLE);
+
+        lv_obj_t *attach_icon = lv_img_create(sg_chat.picture_attach_btn);
+        lv_img_set_src(attach_icon, &icon_add_img);
+        lv_obj_set_style_img_recolor(attach_icon, lv_color_white(), 0);
+        lv_obj_set_style_img_recolor_opa(attach_icon, LV_OPA_COVER, 0);
+        lv_obj_center(attach_icon);
+
+        lv_obj_add_event_cb(sg_chat.picture_attach_btn, __picture_attach_btn_cb, LV_EVENT_CLICKED, NULL);
+#endif /* ENABLE_IMAGE_ALBUM */
+    }
+
+#if defined(ENABLE_PRINTER) && (ENABLE_PRINTER == 1)
+    if (NULL == sg_chat.picture_print_overlay) {
+        PR_NOTICE("picture: creating print overlay (first show)");
+        sg_chat.picture_print_overlay = lv_obj_create(sg_chat.picture);
+        lv_obj_set_size(sg_chat.picture_print_overlay, LV_HOR_RES, LV_VER_RES);
+        lv_obj_set_pos(sg_chat.picture_print_overlay, 0, 0);
+        lv_obj_set_style_bg_color(sg_chat.picture_print_overlay, lv_color_black(), 0);
+        lv_obj_set_style_bg_opa(sg_chat.picture_print_overlay, LV_OPA_70, 0);
+        lv_obj_set_style_border_width(sg_chat.picture_print_overlay, 0, 0);
+        lv_obj_set_style_radius(sg_chat.picture_print_overlay, 0, 0);
+        lv_obj_clear_flag(sg_chat.picture_print_overlay, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_add_flag(sg_chat.picture_print_overlay, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_HIDDEN);
+        lv_obj_set_flex_flow(sg_chat.picture_print_overlay, LV_FLEX_FLOW_COLUMN);
+        lv_obj_set_flex_align(sg_chat.picture_print_overlay, LV_FLEX_ALIGN_CENTER,
+                              LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+        lv_obj_set_style_pad_row(sg_chat.picture_print_overlay, 24, 0);
+
+        /* Title label */
+        lv_obj_t *print_title = lv_label_create(sg_chat.picture_print_overlay);
+        lv_obj_set_style_text_color(print_title, lv_color_white(), 0);
+        lv_label_set_text(print_title, PRINT_IMAGE);
+        sg_chat.picture_print_status_label = print_title;
+
+        /* Button row */
+        lv_obj_t *btn_row = lv_obj_create(sg_chat.picture_print_overlay);
+        lv_obj_remove_style_all(btn_row);
+        lv_obj_set_size(btn_row, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+        lv_obj_set_flex_flow(btn_row, LV_FLEX_FLOW_ROW);
+        lv_obj_set_flex_align(btn_row, LV_FLEX_ALIGN_CENTER,
+                              LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+        lv_obj_set_style_pad_column(btn_row, 24, 0);
+        sg_chat.picture_print_btn_row = btn_row;
+
+        /* Cancel button */
+        lv_obj_t *cancel_btn = lv_obj_create(btn_row);
+        lv_obj_set_size(cancel_btn, 80, 36);
+        lv_obj_set_style_bg_color(cancel_btn, lv_color_hex(0x555555), 0);
+        lv_obj_set_style_bg_opa(cancel_btn, LV_OPA_COVER, 0);
+        lv_obj_set_style_border_width(cancel_btn, 0, 0);
+        lv_obj_set_style_radius(cancel_btn, 8, 0);
+        lv_obj_set_style_pad_all(cancel_btn, 0, 0);
+        lv_obj_clear_flag(cancel_btn, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_add_flag(cancel_btn, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_t *cancel_label = lv_label_create(cancel_btn);
+        lv_label_set_text(cancel_label, CANCEL);
+        lv_obj_set_style_text_color(cancel_label, lv_color_white(), 0);
+        lv_obj_center(cancel_label);
+        lv_obj_add_event_cb(cancel_btn, __picture_print_cancel_btn_cb, LV_EVENT_CLICKED, NULL);
+
+        /* Confirm button */
+        lv_obj_t *confirm_btn = lv_obj_create(btn_row);
+        lv_obj_set_size(confirm_btn, 80, 36);
+        lv_obj_set_style_bg_color(confirm_btn, lv_color_hex(0x07C160), 0);
+        lv_obj_set_style_bg_opa(confirm_btn, LV_OPA_COVER, 0);
+        lv_obj_set_style_border_width(confirm_btn, 0, 0);
+        lv_obj_set_style_radius(confirm_btn, 8, 0);
+        lv_obj_set_style_pad_all(confirm_btn, 0, 0);
+        lv_obj_clear_flag(confirm_btn, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_add_flag(confirm_btn, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_t *confirm_label = lv_label_create(confirm_btn);
+        lv_label_set_text(confirm_label, CONFIRM_TEXT);
+        lv_obj_set_style_text_color(confirm_label, lv_color_white(), 0);
+        lv_obj_center(confirm_label);
+        lv_obj_add_event_cb(confirm_btn, __picture_print_confirm_btn_cb, LV_EVENT_CLICKED, NULL);
+    }
+#endif /* ENABLE_PRINTER */
 
     if (sg_picture_buffer) {
         Free(sg_picture_buffer);
@@ -627,6 +806,7 @@ static void __ui_disp_link(bool is_ai, char *text, AI_UI_CHAT_LINK_CB cb, void *
     }
 
     lv_obj_update_layout(sg_chat.content);
+    lv_obj_scroll_to_view_recursive(label, LV_ANIM_ON);
 
     lv_vendor_disp_unlock();
 }
@@ -839,62 +1019,8 @@ void ai_ui_wechat_chat_init(lv_obj_t *parent)
     lv_obj_set_style_border_width(sg_chat.picture, 0, 0);
     lv_obj_set_style_radius(sg_chat.picture, 0, 0);
     lv_obj_align(sg_chat.picture, LV_ALIGN_CENTER, 0, 0);
-    lv_obj_add_flag(sg_chat.picture, LV_OBJ_FLAG_HIDDEN);
-
-    /* Floating action pill — right-center of picture view, child of picture */
-    {
-        const lv_font_t *icon_font = ai_ui_get_icon_font();
-
-        sg_chat.picture_action_bar = lv_obj_create(sg_chat.picture);
-        lv_obj_set_size(sg_chat.picture_action_bar, 36, 80);
-        lv_obj_align(sg_chat.picture_action_bar, LV_ALIGN_RIGHT_MID, -10, 0);
-        lv_obj_set_style_bg_color(sg_chat.picture_action_bar, lv_color_black(), 0);
-        lv_obj_set_style_bg_opa(sg_chat.picture_action_bar, 140, 0); /* ~55 % opaque */
-        lv_obj_set_style_radius(sg_chat.picture_action_bar, 18, 0);
-        lv_obj_set_style_border_width(sg_chat.picture_action_bar, 0, 0);
-        lv_obj_set_style_pad_all(sg_chat.picture_action_bar, 0, 0);
-        lv_obj_clear_flag(sg_chat.picture_action_bar, LV_OBJ_FLAG_SCROLLABLE);
-
-#if defined(ENABLE_PRINTER) && (ENABLE_PRINTER == 1)
-        sg_chat.picture_print_btn = lv_obj_create(sg_chat.picture_action_bar);
-        lv_obj_set_size(sg_chat.picture_print_btn, 36, 36);
-        lv_obj_align(sg_chat.picture_print_btn, LV_ALIGN_TOP_MID, 0, 0);
-        lv_obj_set_style_bg_opa(sg_chat.picture_print_btn, LV_OPA_TRANSP, 0);
-        lv_obj_set_style_border_width(sg_chat.picture_print_btn, 0, 0);
-        lv_obj_set_style_pad_all(sg_chat.picture_print_btn, 0, 0);
-        lv_obj_set_style_radius(sg_chat.picture_print_btn, 0, 0);
-        lv_obj_clear_flag(sg_chat.picture_print_btn, LV_OBJ_FLAG_SCROLLABLE);
-        lv_obj_add_flag(sg_chat.picture_print_btn, LV_OBJ_FLAG_CLICKABLE);
-
-        lv_obj_t *print_icon = lv_label_create(sg_chat.picture_print_btn);
-        lv_obj_set_style_text_font(print_icon, icon_font, 0);
-        lv_obj_set_style_text_color(print_icon, lv_color_white(), 0);
-        lv_label_set_text(print_icon, FONT_AWESOME_PRINT);
-        lv_obj_center(print_icon);
-
-        lv_obj_add_event_cb(sg_chat.picture_print_btn, __picture_print_btn_cb, LV_EVENT_CLICKED, NULL);
-#endif /* ENABLE_PRINTER */
-
-#if defined(ENABLE_IMAGE_ALBUM) && (ENABLE_IMAGE_ALBUM == 1)
-        sg_chat.picture_attach_btn = lv_obj_create(sg_chat.picture_action_bar);
-        lv_obj_set_size(sg_chat.picture_attach_btn, 36, 36);
-        lv_obj_align(sg_chat.picture_attach_btn, LV_ALIGN_BOTTOM_MID, 0, 0);
-        lv_obj_set_style_bg_opa(sg_chat.picture_attach_btn, LV_OPA_TRANSP, 0);
-        lv_obj_set_style_border_width(sg_chat.picture_attach_btn, 0, 0);
-        lv_obj_set_style_pad_all(sg_chat.picture_attach_btn, 0, 0);
-        lv_obj_set_style_radius(sg_chat.picture_attach_btn, 0, 0);
-        lv_obj_clear_flag(sg_chat.picture_attach_btn, LV_OBJ_FLAG_SCROLLABLE);
-        lv_obj_add_flag(sg_chat.picture_attach_btn, LV_OBJ_FLAG_CLICKABLE);
-
-        lv_obj_t *attach_icon = lv_label_create(sg_chat.picture_attach_btn);
-        lv_obj_set_style_text_font(attach_icon, icon_font, 0);
-        lv_obj_set_style_text_color(attach_icon, lv_color_white(), 0);
-        lv_label_set_text(attach_icon, FONT_AWESOME_IMAGE);
-        lv_obj_center(attach_icon);
-
-        lv_obj_add_event_cb(sg_chat.picture_attach_btn, __picture_attach_btn_cb, LV_EVENT_CLICKED, NULL);
-#endif /* ENABLE_IMAGE_ALBUM */
-    }
+    lv_obj_add_flag(sg_chat.picture, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_event_cb(sg_chat.picture, __return_chat_content_event_cb, LV_EVENT_CLICKED, NULL);
 
     /* Attach bar — horizontal row of thumbnails at bottom, hidden by default */
     sg_chat.attach_bar = lv_obj_create(parent);
@@ -1068,6 +1194,9 @@ void ai_ui_wechat_chat_register(void)
     intfs.disp_link               = __ui_disp_link;
     intfs.disp_add_chat_attch_img = __ui_add_chat_attch_img;
     intfs.disp_clear_chat_attach  = __ui_clear_chat_attach;
+#if defined(ENABLE_PRINTER) && (ENABLE_PRINTER == 1)
+    intfs.disp_print_result       = __picture_disp_print_result;
+#endif
 
     ai_ui_chat_register(&intfs);
 }

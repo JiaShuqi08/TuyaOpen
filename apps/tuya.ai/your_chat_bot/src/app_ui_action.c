@@ -177,18 +177,21 @@ static void __app_ui_action_handle(AI_UI_ACTION_E action, uint8_t *data, uint32_
         ai_video_get_jpeg_frame(&jpeg, &jpeg_len);
 
         if (jpeg && jpeg_len) {
+#if defined(ENABLE_COMP_AI_PICTURE) && (ENABLE_COMP_AI_PICTURE == 1)
             char name[AI_PICTURE_NAME_MAX_LEN + 1] = {0};
-            ai_picture_save_to_album(jpeg, jpeg_len, name);
+            ai_picture_save_to_album(jpeg, jpeg_len, NULL, name);
             ai_ui_disp_msg_sync(AI_UI_DISP_CAMERA_THUMB, jpeg, jpeg_len);
-
-            if (sg_ai_vision_enabled && name[0]) {
+#endif
+            if (sg_ai_vision_enabled) {
                 /* Close camera so the user sees the AI response in chat */
                 ai_video_stop();
                 ai_video_set_yuv_frame_flush_cb(NULL);
                 ai_ui_disp_msg_sync(AI_UI_DISP_CAMERA_CLOSE, NULL, 0);
+#if defined(ENABLE_COMP_AI_PICTURE) && (ENABLE_COMP_AI_PICTURE == 1)
                 ai_ui_disp_msg(AI_UI_DISP_USER_IMAGE_LINK, (uint8_t *)name, strlen(name));
 
                 ai_picture_input_recognize(jpeg, jpeg_len);
+#endif
             } else {
                 ai_ui_disp_msg_sync(AI_UI_DISP_CAMERA_THUMB, jpeg, jpeg_len);
             }

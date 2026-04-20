@@ -443,6 +443,9 @@ static void __ui_disp_msg_handle(AI_UI_MSG_T *msg_data)
             bool ok = (msg_data->len == sizeof(int32_t) &&
                        *(int32_t *)msg_data->data == OPRT_OK);
             ai_ui_image_album_show_print_result(ok);
+            if (sg_chat_intfs.disp_print_result) {
+                sg_chat_intfs.disp_print_result(ok);
+            }
         } break;
 #endif
 
