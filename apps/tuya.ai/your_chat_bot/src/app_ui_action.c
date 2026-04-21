@@ -21,10 +21,7 @@
 #endif
 
 #if defined(ENABLE_PRINTER) && (ENABLE_PRINTER == 1)
-#include "tdl_printer_manage.h"
-#include "tal_image_jpeg_codec.h"
-#include "image_album.h"
-#include "ai_picture.h"
+#include "app_printer.h"
 #endif
 
 /***********************************************************
@@ -35,105 +32,6 @@
 /***********************************************************
 ***********************typedef define***********************
 ***********************************************************/
-
-
-#if defined(ENABLE_PRINTER) && (ENABLE_PRINTER == 1)
-static OPERATE_RET __print_img_from_album(const char *filename)
-{
-    TDL_PRINTER_HANDLE printer_hdl = NULL;
-    OPERATE_RET rt = tdl_printer_find(PRINTER_NAME, &printer_hdl);
-    if (rt != OPRT_OK) {
-        PR_ERR("print: printer \"%s\" not found, rt:%d", PRINTER_NAME, rt);
-        return rt;
-    }
-
-    rt = tdl_printer_open(printer_hdl, NULL);
-    if (rt != OPRT_OK) {
-        PR_ERR("print: printer open failed, rt:%d", rt);
-        return rt;
-    }
-
-    TDL_PRINTER_DEV_INFO_T dev_info = {0};
-    tdl_printer_get_dev_info(printer_hdl, &dev_info);
-    uint16_t print_width = (uint16_t)dev_info.dots_per_line;
-    if (0 == print_width) {
-        PR_ERR("print: invalid dots_per_line");
-        tdl_printer_close(printer_hdl);
-        return OPRT_INVALID_PARM;
-    }
-
-    IMAGE_ALBUM_HANDLE album_hdl = image_album_find_by_name(ai_picture_get_album_name());
-    if (NULL == album_hdl) {
-        PR_ERR("print: album not found");
-        tdl_printer_close(printer_hdl);
-        return OPRT_INVALID_PARM;
-    }
-
-    uint8_t *jpeg_data = NULL;
-    size_t   jpeg_size = 0;
-    rt = image_album_read(album_hdl, filename, 0, &jpeg_data, &jpeg_size);
-    if (rt != OPRT_OK || NULL == jpeg_data) {
-        PR_ERR("print: image_album_read \"%s\" failed, rt:%d", filename, rt);
-        tdl_printer_close(printer_hdl);
-        return (rt != OPRT_OK) ? rt : OPRT_INVALID_PARM;
-    }
-
-    TAL_IMAGE_JPEG_INFO_T jpeg_info = {0};
-    rt = tal_image_jpeg_get_info(jpeg_data, (uint32_t)jpeg_size, &jpeg_info);
-    if (rt != OPRT_OK || 0 == jpeg_info.width) {
-        PR_ERR("print: jpeg_get_info failed, rt:%d", rt);
-        image_album_free_file_data(jpeg_data);
-        tdl_printer_close(printer_hdl);
-        return (rt != OPRT_OK) ? rt : OPRT_INVALID_PARM;
-    }
-
-    uint16_t src_width  = (uint16_t)jpeg_info.width;
-    uint16_t src_height = (uint16_t)jpeg_info.height;
-
-    /* Decode directly to printer dimensions (scale down if image is wider) */
-    uint16_t out_w = (src_width > print_width) ? print_width : src_width;
-    uint16_t out_h = (src_width > print_width)
-                     ? (uint16_t)((uint32_t)src_height * print_width / src_width)
-                     : src_height;
-    if (out_h == 0) out_h = 1;
-    uint32_t bitmap_bytes = ((uint32_t)(out_w + 7u) / 8u) * out_h;
-
-    uint8_t *bitmap_buf = (uint8_t *)tal_malloc(bitmap_bytes);
-    if (NULL == bitmap_buf) {
-        PR_ERR("print: malloc %u bytes for bitmap failed", bitmap_bytes);
-        image_album_free_file_data(jpeg_data);
-        tdl_printer_close(printer_hdl);
-        return OPRT_MALLOC_FAILED;
-    }
-
-    TAL_IMAGE_JPEG_OUTPUT_T out = {
-        .out_buf      = bitmap_buf,
-        .out_buf_size = bitmap_bytes,
-        .out_width    = out_w,
-        .out_height   = out_h,
-    };
-    rt = tal_image_jpeg_decode_bitmap(jpeg_data, (uint32_t)jpeg_size, &out, 128);
-    image_album_free_file_data(jpeg_data);
-
-    if (rt != OPRT_OK) {
-        PR_ERR("print: jpeg_decode_bitmap failed, rt:%d", rt);
-        tal_free(bitmap_buf);
-        tdl_printer_close(printer_hdl);
-        return rt;
-    }
-
-    rt = tdl_printer_send_bitmap(printer_hdl, 0, out_w, out_h, bitmap_buf);
-    tal_free(bitmap_buf);
-    if (rt != OPRT_OK) {
-        PR_ERR("print: send_bitmap failed, rt:%d", rt);
-    }
-
-    tdl_printer_close(printer_hdl);
-    return rt;
-}
-#endif /* ENABLE_PRINTER */
-
-
 #if defined(ENABLE_COMP_AI_VIDEO) && (ENABLE_COMP_AI_VIDEO == 1)
 static bool sg_ai_vision_enabled = false;
 #endif
@@ -280,17 +178,15 @@ static void __app_ui_action_handle(AI_UI_ACTION_E action, uint8_t *data, uint32_
     } break;
 
 #if defined(ENABLE_PRINTER) && (ENABLE_PRINTER == 1)
-    case AI_UI_ACT_PRINT_IMG:
+    case AI_UI_ACT_PRINT_IMG: {
         if (NULL == data || 0 == len) {
             PR_ERR("print: filename is null");
             break;
         }
-        {
-            OPERATE_RET print_rt = __print_img_from_album((const char *)data);
-            int32_t result = (int32_t)print_rt;
-            ai_ui_disp_msg(AI_UI_DISP_PRINT_RESULT, (uint8_t *)&result, sizeof(result));
-        }
-        break;
+        OPERATE_RET print_rt = app_print_img_from_album((const char *)data);
+        int32_t result = (int32_t)print_rt;
+        ai_ui_disp_msg(AI_UI_DISP_PRINT_RESULT, (uint8_t *)&result, sizeof(result));
+    } break;
 #endif /* ENABLE_PRINTER */
 
 #endif /* ENABLE_IMAGE_ALBUM */

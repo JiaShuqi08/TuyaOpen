@@ -15,6 +15,11 @@
 #if defined(ENABLE_WIFI) && (ENABLE_WIFI == 1)
 #include "tkl_wifi.h"
 #endif
+
+#if defined(ENABLE_PRINTER) && (ENABLE_PRINTER == 1)
+#include "app_printer.h"
+#endif
+
 /***********************************************************
 ************************macro define************************
 ***********************************************************/
@@ -102,7 +107,19 @@ static void __display_status_tm_cb(TIMER_ID timer_id, void *arg)
 
 static void __ai_chat_handle_event(AI_NOTIFY_EVENT_T *event)
 {
-    (void)event;
+    switch(event->type) {
+        #if defined(ENABLE_PRINTER) && (ENABLE_PRINTER == 1)
+        case AI_USER_EVT_PRINT_PICTURE: {
+            #if defined(ENABLE_COMP_AI_DISPLAY) && (ENABLE_COMP_AI_DISPLAY == 1)
+            ai_ui_disp_msg(AI_UI_DISP_AI_IMAGE_LINK, (uint8_t *)(event->data), strlen((char *)(event->data))+1);
+            #endif
+            app_print_img_from_album((const char *)event->data);
+        } break;
+        #endif
+        default:
+        break;
+    }
+
 }
 
 OPERATE_RET app_chat_bot_init(void)
