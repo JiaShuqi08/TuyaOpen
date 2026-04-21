@@ -120,7 +120,7 @@ void ai_chat_ui_handle_event(AI_NOTIFY_EVENT_T *event)
     } break;
 
 #if defined(ENABLE_COMP_AI_PICTURE) && (ENABLE_COMP_AI_PICTURE == 1)
-    case AI_USER_EVT_ACCEPT_PICTURE: {
+    case AI_USER_EVT_PICTURE_GENERATED: {
         ai_ui_disp_msg(AI_UI_DISP_AI_IMAGE_LINK, (uint8_t *)(event->data), strlen((char *)(event->data))+1);
     } break;
 

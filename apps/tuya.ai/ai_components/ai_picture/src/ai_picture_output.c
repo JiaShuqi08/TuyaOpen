@@ -172,8 +172,8 @@ OPERATE_RET ai_picture_output_save_to_album(uint8_t *data, uint32_t len, uint32_
         if (rt != OPRT_OK) {
             PR_ERR("[pic_chain] save to album failed, rt:%d", rt);
         } else {
-            PR_NOTICE("[pic_chain] save to album success, name:%s, notify ACCEPT_PICTURE", name);
-            ai_user_event_notify(AI_USER_EVT_ACCEPT_PICTURE, name);
+            PR_NOTICE("[pic_chain] save to album success, name:%s, notify PICTURE_GENERATED", name);
+            ai_user_event_notify(AI_USER_EVT_PICTURE_GENERATED, name);
         }
 
         __ai_picture_output_accum_reset();
@@ -240,7 +240,7 @@ static OPERATE_RET __ai_picture_dld_notify(FILE_DL_NOTIFY_TYPE_E type, void *inf
             if (rt != OPRT_OK) {
                 PR_ERR("dld save to album failed, rt:%d", rt);
             } else {
-                ai_user_event_notify(AI_USER_EVT_ACCEPT_PICTURE, saved_name);
+                ai_user_event_notify(AI_USER_EVT_PRINT_PICTURE, saved_name);
             }
         }
         if (sg_dld_file.buf) {
