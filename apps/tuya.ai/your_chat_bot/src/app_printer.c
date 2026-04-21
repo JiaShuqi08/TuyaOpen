@@ -42,6 +42,22 @@ OPERATE_RET app_print_jpeg_img(uint8_t *jpeg, uint32_t len)
         return OPRT_INVALID_PARM;
     }
 
+    /* Reject non-JPEG payloads up front. The image album can now hold both
+     * JPEG and PNG (a recent feature), but the printer pipeline only knows
+     * how to decode JPEG. Without this guard tal_image_jpeg_get_info()
+     * just returns OPRT_INVALID_PARM (-2) which is hard to read at the
+     * call site. JPEG SOI marker = 0xFF 0xD8 0xFF. */
+    if (len < 3 ||
+        jpeg[0] != 0xFF || jpeg[1] != 0xD8 || jpeg[2] != 0xFF) {
+        PR_ERR("print: unsupported image format "
+               "(magic=%02x %02x %02x, len=%u). "
+               "Only JPEG is supported.",
+               (len > 0) ? jpeg[0] : 0,
+               (len > 1) ? jpeg[1] : 0,
+               (len > 2) ? jpeg[2] : 0, len);
+        return OPRT_NOT_SUPPORTED;
+    }
+
     TAL_IMAGE_JPEG_INFO_T jpeg_info = {0};
     TUYA_CALL_ERR_RETURN(tal_image_jpeg_get_info(jpeg, len, &jpeg_info));
 
