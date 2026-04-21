@@ -229,9 +229,15 @@ static void __picture_print_result_timeout_cb(lv_timer_t *timer)
     (void)timer;
     lv_timer_del(sg_chat.picture_print_result_tm);
     sg_chat.picture_print_result_tm = NULL;
-    lv_obj_add_flag(sg_chat.picture_print_overlay, LV_OBJ_FLAG_HIDDEN);
-    lv_label_set_text(sg_chat.picture_print_status_label, PRINT_IMAGE);
-    lv_obj_clear_flag(sg_chat.picture_print_btn_row, LV_OBJ_FLAG_HIDDEN);
+    if (sg_chat.picture_print_overlay != NULL) {
+        lv_obj_add_flag(sg_chat.picture_print_overlay, LV_OBJ_FLAG_HIDDEN);
+    }
+    if (sg_chat.picture_print_status_label != NULL) {
+        lv_label_set_text(sg_chat.picture_print_status_label, PRINT_IMAGE);
+    }
+    if (sg_chat.picture_print_btn_row != NULL) {
+        lv_obj_clear_flag(sg_chat.picture_print_btn_row, LV_OBJ_FLAG_HIDDEN);
+    }
 }
 
 static void __picture_print_cancel_btn_cb(lv_event_t *e)
@@ -253,6 +259,16 @@ static void __picture_print_confirm_btn_cb(lv_event_t *e)
 static void __picture_disp_print_result(bool ok)
 {
     lv_vendor_disp_lock();
+    /* The print overlay/labels are created lazily when the user first opens
+     * the picture page. If a print-result message arrives before that
+     * (e.g. printing was triggered from another path), the labels may be
+     * NULL. Skip the UI update silently in that case to avoid a NULL deref
+     * crash inside lv_label_set_text(). */
+    if (sg_chat.picture_print_status_label == NULL) {
+        PR_NOTICE("picture: print result(%d) ignored, overlay not ready", ok);
+        lv_vendor_disp_unlock();
+        return;
+    }
     lv_label_set_text(sg_chat.picture_print_status_label,
                       ok ? PRINT_SUCCESS : PRINT_FAILED);
     if (sg_chat.picture_print_result_tm == NULL) {
