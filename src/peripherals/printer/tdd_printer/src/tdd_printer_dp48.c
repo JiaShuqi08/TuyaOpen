@@ -9,7 +9,26 @@
 
 #include "tal_log.h"
 #include "tal_memory.h"
+#include "tal_system.h"
 #include "tal_uart.h"
+
+/***********************************************************
+************************macro define************************
+***********************************************************/
+/* TX-drain guard before tal_uart_deinit().
+ *
+ * tal_uart_write() returns once bytes are queued in the TX ring / hardware
+ * FIFO, not once they have actually been clocked out on the line, and
+ * tal_uart has no public flush/drain API. If close() calls
+ * tal_uart_deinit() while the FIFO still holds bytes, those bytes are
+ * lost: the printer receives a truncated stream and the next print job
+ * starts mid-command from the printer's point of view, producing garbled
+ * output.
+ *
+ * Sleep before deinit to give the FIFO time to fully drain. The size of a
+ * typical UART hardware FIFO + small ring buffer at 9600 baud is bounded
+ * by a few hundred bytes, so 200 ms is comfortably above the worst case. */
+#define DP48_UART_DRAIN_GUARD_MS 200
 
 /***********************************************************
 ***********************typedef define***********************
@@ -21,20 +40,25 @@ typedef struct {
 /***********************************************************
 ***********************function define**********************
 ***********************************************************/
+/* Initialize the UART. If init fails (e.g. because a previous open did
+ * not deinit cleanly, or another module left the port in a stale state),
+ * deinit once and try again so the next print job has a clean port. */
 static OPERATE_RET __tdd_printer_dp48_open(TDD_PRINTER_HANDLE_T handle)
 {
     TUYA_CHECK_NULL_RETURN(handle, OPRT_INVALID_PARM);
 
     TDD_PRINTER_DP48_HANDLE_T *hdl = (TDD_PRINTER_DP48_HANDLE_T *)handle;
 
-    OPERATE_RET rt = tal_uart_deinit(hdl->cfg.port_id);
-    if (rt != OPRT_OK) {
-        PR_DEBUG("DP48 pre-open deinit(port %d): rt=%d", hdl->cfg.port_id, rt);
+    OPERATE_RET rt = tal_uart_init(hdl->cfg.port_id, &hdl->cfg.uart_cfg);
+    if (rt == OPRT_OK) {
+        return OPRT_OK;
     }
 
+    PR_WARN("DP48 UART init failed (rt=%d), retrying after deinit", rt);
+    (void)tal_uart_deinit(hdl->cfg.port_id);
     rt = tal_uart_init(hdl->cfg.port_id, &hdl->cfg.uart_cfg);
     if (rt != OPRT_OK) {
-        PR_ERR("DP48 UART init failed: %d", rt);
+        PR_ERR("DP48 UART init retry failed: %d", rt);
     }
     return rt;
 }
@@ -66,6 +90,11 @@ static OPERATE_RET __tdd_printer_dp48_close(TDD_PRINTER_HANDLE_T handle)
     TUYA_CHECK_NULL_RETURN(handle, OPRT_INVALID_PARM);
 
     TDD_PRINTER_DP48_HANDLE_T *hdl = (TDD_PRINTER_DP48_HANDLE_T *)handle;
+
+    /* Wait for any bytes still queued in the UART TX FIFO / ring buffer
+     * to be clocked out before tearing the peripheral down — see the
+     * comment on DP48_UART_DRAIN_GUARD_MS. */
+    tal_system_sleep(DP48_UART_DRAIN_GUARD_MS);
 
     return tal_uart_deinit(hdl->cfg.port_id);
 }

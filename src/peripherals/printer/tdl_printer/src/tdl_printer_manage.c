@@ -596,6 +596,22 @@ static void __bitmap_place_row(uint8_t *dst,
     }
 }
 
+/* Maximum rows per GS v 0 command.
+ *
+ * The ESC/POS "GS v 0" raster-bitmap command (0x1D 0x76 0x30 m xL xH yL yH)
+ * specifies image height as a 16-bit value, but in practice many low-end
+ * thermal printers (DP-48A and the like) silently truncate the height to a
+ * driver-internal limit (often 256 or even 128 rows). When the host sends
+ * more rows than that, the printer renders the first chunk as a bitmap,
+ * then exits raster mode and starts interpreting the remaining bytes as
+ * TEXT — which is exactly what produces full-page garbled GBK/ASCII output
+ * for tall images while shorter images print fine.
+ *
+ * Splitting tall images into multiple GS v 0 commands of <= 128 rows each
+ * is the standard workaround that works with virtually all ESC/POS
+ * thermal printers. */
+#define ESCPOS_MAX_ROWS_PER_BITMAP 128
+
 static OPERATE_RET __send_bitmap_escpos(TDL_PRINTER_NODE_T *node,
                                          uint16_t x, uint16_t eff_width,
                                          uint16_t src_bytes_per_row,
@@ -606,33 +622,56 @@ static OPERATE_RET __send_bitmap_escpos(TDL_PRINTER_NODE_T *node,
     uint16_t total_width = x + eff_width;
     uint16_t total_bytes = (total_width + 7) / 8;
 
-    /* Allocate row buffer before sending the command header so that a malloc
+    /* Allocate row buffer before sending any command so that a malloc
      * failure leaves the printer state untouched. */
     uint8_t *row_buf = (uint8_t *)tal_malloc(total_bytes);
     if (row_buf == NULL) {
         return OPRT_MALLOC_FAILED;
     }
 
-    /* GS v 0 command */
-    uint8_t cmd[] = {
-        0x1D, 0x76, 0x30, 0x00,
-        (uint8_t)(total_bytes & 0xFF), (uint8_t)(total_bytes >> 8),
-        (uint8_t)(height & 0xFF),      (uint8_t)(height >> 8)
-    };
-    OPERATE_RET rt = node->intfs.write(node->tdd_handle, cmd, sizeof(cmd));
-    if (rt != OPRT_OK) {
-        tal_free(row_buf);
-        return rt;
-    }
+    uint16_t rows_remaining = height;
+    uint16_t row_offset = 0;
 
-    for (uint16_t row = 0; row < height; row++) {
-        const uint8_t *src_row = data + (uint32_t)row * src_bytes_per_row;
-        memset(row_buf, 0, total_bytes);
-        __bitmap_place_row(row_buf, src_row, x, eff_width);
-        OPERATE_RET rt = node->intfs.write(node->tdd_handle, row_buf, total_bytes);
+    while (rows_remaining > 0) {
+        uint16_t chunk_rows = (rows_remaining > ESCPOS_MAX_ROWS_PER_BITMAP)
+                                  ? ESCPOS_MAX_ROWS_PER_BITMAP
+                                  : rows_remaining;
+
+        /* GS v 0 m xL xH yL yH — one command per chunk */
+        uint8_t cmd[] = {
+            0x1D, 0x76, 0x30, 0x00,
+            (uint8_t)(total_bytes & 0xFF), (uint8_t)(total_bytes >> 8),
+            (uint8_t)(chunk_rows & 0xFF),  (uint8_t)(chunk_rows >> 8),
+        };
+        OPERATE_RET rt = node->intfs.write(node->tdd_handle, cmd, sizeof(cmd));
         if (rt != OPRT_OK) {
             tal_free(row_buf);
             return rt;
+        }
+
+        for (uint16_t i = 0; i < chunk_rows; i++) {
+            const uint8_t *src_row =
+                data + (uint32_t)(row_offset + i) * src_bytes_per_row;
+            memset(row_buf, 0, total_bytes);
+            __bitmap_place_row(row_buf, src_row, x, eff_width);
+            rt = node->intfs.write(node->tdd_handle, row_buf, total_bytes);
+            if (rt != OPRT_OK) {
+                tal_free(row_buf);
+                return rt;
+            }
+            /* Give the printer state machine a tick between rows. */
+            tal_system_sleep(1);
+        }
+
+        row_offset    += chunk_rows;
+        rows_remaining -= chunk_rows;
+
+        /* Let the printer fully finish this raster chunk and return to
+         * the command-parsing state before sending the next GS v 0
+         * header. Without this delay some printers still treat the
+         * incoming command bytes as bitmap padding. */
+        if (rows_remaining > 0) {
+            tal_system_sleep(20);
         }
     }
 
@@ -662,6 +701,8 @@ static OPERATE_RET __send_bitmap_raw(TDL_PRINTER_NODE_T *node,
             tal_free(row_buf);
             return rt;
         }
+        /* See note in __send_bitmap_escpos. */
+        tal_system_sleep(1);
     }
 
     tal_free(row_buf);

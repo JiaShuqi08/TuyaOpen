@@ -69,7 +69,7 @@ config TUYA_T5AI_BOARD_CAMERA
 
 # ---- Printer Module ----
 config TUYA_T5AI_BOARD_PRINTER_DP48
-    bool "DP-48A ESC/POS thermal printer (UART2, 19200 bps)"
+    bool "DP-48A ESC/POS thermal printer (UART0, 9600 bps)"
     default n
     select ENABLE_PRINTER
     select ENABLE_PRINTER_DP48
