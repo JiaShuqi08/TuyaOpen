@@ -67,14 +67,44 @@ static char **config_key_store[] = {&s_file_dld_ctx.config.provider, &s_file_dld
 static OPERATE_RET __dl_mq_rept(cJSON *req_root, char *event, uint32_t code, char *name, char *errmsg)
 {
     OPERATE_RET rt        = OPRT_OK;
-    cJSON      *rept_root = cJSON_CreateObject();
-    TUYA_CHECK_NULL_RETURN(rept_root, OPRT_MALLOC_FAILED);
-    cJSON_AddStringToObject(rept_root, "reqType", MQ_FILE_STORAGE_DL);
-    if (cJSON_GetObjectItem(req_root, "sid")) {
-        cJSON_AddStringToObject(rept_root, "sid", cJSON_GetObjectItem(req_root, "sid")->valuestring);
+    cJSON      *rept_root = NULL;
+
+    if (NULL == req_root || NULL == event) {
+        PR_ERR("invalid param: req_root=%p, event=%p", req_root, event);
+        if (errmsg) {
+            Free(errmsg);
+        }
+        return OPRT_INVALID_PARM;
     }
+
+    rept_root = cJSON_CreateObject();
+    if (NULL == rept_root) {
+        if (errmsg) {
+            Free(errmsg);
+        }
+        return OPRT_MALLOC_FAILED;
+    }
+
+    cJSON_AddStringToObject(rept_root, "reqType", MQ_FILE_STORAGE_DL);
+
+    cJSON *sid = cJSON_GetObjectItem(req_root, "sid");
+    if (cJSON_IsString(sid) && sid->valuestring) {
+        cJSON_AddStringToObject(rept_root, "sid", sid->valuestring);
+    }
+
     cJSON_AddStringToObject(rept_root, "event", event);
-    cJSON_AddStringToObject(rept_root, "prefix", cJSON_GetObjectItem(req_root, "prefix")->valuestring);
+
+    cJSON *prefix = cJSON_GetObjectItem(req_root, "prefix");
+    if (!cJSON_IsString(prefix) || NULL == prefix->valuestring) {
+        PR_ERR("prefix invalid");
+        cJSON_Delete(rept_root);
+        if (errmsg) {
+            Free(errmsg);
+        }
+        return OPRT_CJSON_GET_ERR;
+    }
+    cJSON_AddStringToObject(rept_root, "prefix", prefix->valuestring);
+
     cJSON_AddNumberToObject(rept_root, "code", code);
     if (errmsg) {
         cJSON_AddStringToObject(rept_root, "errmsg", errmsg);
@@ -82,13 +112,15 @@ static OPERATE_RET __dl_mq_rept(cJSON *req_root, char *event, uint32_t code, cha
     if (name) {
         cJSON_AddStringToObject(rept_root, "realFn", name);
     }
+
     cJSON *meta = cJSON_GetObjectItem(req_root, "meta");
-    if (meta && strlen(meta->valuestring)) {
+    if (cJSON_IsString(meta) && meta->valuestring && strlen(meta->valuestring)) {
         cJSON_AddStringToObject(rept_root, "meta", meta->valuestring);
     }
+
     char *body = cJSON_PrintUnformatted(rept_root);
     if (errmsg) {
-        tal_free(errmsg);
+        Free(errmsg);
     }
     cJSON_Delete(rept_root);
     TUYA_CHECK_NULL_RETURN(body, OPRT_MALLOC_FAILED);
@@ -96,7 +128,7 @@ static OPERATE_RET __dl_mq_rept(cJSON *req_root, char *event, uint32_t code, cha
     tuya_iot_client_t *client = tuya_iot_client_get();
     rt = tuya_mqtt_protocol_data_publish(&client->mqctx, PRO_DEV_DA_RESP, (const uint8_t *)body, strlen(body));
     PR_DEBUG("mq rept rt:%d", rt);
-    tal_free(body);
+    Free(body);
     return rt;
 }
 
@@ -126,7 +158,7 @@ static void __dl_storage_free_config(void)
     int idx = 0;
     for (idx = 0; idx < CNTSOF(config_key_store); idx++) {
         if (*config_key_store[idx]) {
-            tal_free(*config_key_store[idx]);
+            Free(*config_key_store[idx]);
         }
     }
     memset(&s_file_dld_ctx.config, 0, sizeof(s_file_dld_ctx.config));
@@ -145,7 +177,7 @@ OPERATE_RET __dl_get_storage_config(void)
     cJSON_Delete(root);
     TUYA_CHECK_NULL_RETURN(post_data, OPRT_MALLOC_FAILED);
     rt = atop_service_comm_post_simple(ATOP_THING_TC_CONFIG_GET, "2.0", post_data, NULL, &result);
-    tal_free(post_data);
+    Free(post_data);
     if (OPRT_OK != rt) {
         PR_ERR("get file dl config err, rt:%d", rt);
         return rt;
@@ -154,31 +186,21 @@ OPERATE_RET __dl_get_storage_config(void)
     char *key[] = {"provider", "ak", "sk", "bucket", "endpoint", "token", "region", "path"};
     for (idx = 0; idx < CNTSOF(config_key_store); idx++) {
         child = cJSON_GetObjectItem(result, key[idx]);
-        if (NULL == child) {
+        if (!cJSON_IsString(child) || NULL == child->valuestring) {
             PR_ERR("fail to get value for key %s", key[idx]);
             rt = OPRT_CJSON_GET_ERR;
             goto EXIT;
         }
 
-        if(idx == 7) {
-            vaule_len              = strlen("/tc_permanent/237650549");
-            *config_key_store[idx] = tal_malloc(vaule_len + 1);
-            if (NULL == *config_key_store[idx]) {
-                PR_ERR("tal_malloc err");
-                goto EXIT;
-            }
-            memset(*config_key_store[idx], 0, vaule_len + 1);
-            memcpy(*config_key_store[idx], "/tc_permanent/237650549", vaule_len);
-        }else {
-            vaule_len              = strlen(child->valuestring);
-            *config_key_store[idx] = tal_malloc(vaule_len + 1);
-            if (NULL == *config_key_store[idx]) {
-                PR_ERR("tal_malloc err");
-                goto EXIT;
-            }
-            memset(*config_key_store[idx], 0, vaule_len + 1);
-            strncpy(*config_key_store[idx], child->valuestring, vaule_len);
+        vaule_len              = strlen(child->valuestring);
+        *config_key_store[idx] = Malloc(vaule_len + 1);
+        if (NULL == *config_key_store[idx]) {
+            PR_ERR("Malloc err");
+            rt = OPRT_MALLOC_FAILED;
+            goto EXIT;
         }
+        memset(*config_key_store[idx], 0, vaule_len + 1);
+        memcpy(*config_key_store[idx], child->valuestring, vaule_len);
 
         PR_DEBUG("idx:%d,key:%s,len:%d,value:%s", idx, key[idx], vaule_len, *config_key_store[idx]);
     }
@@ -217,8 +239,8 @@ static OPERATE_RET __dl_decode_and_send_to_app(uint8_t *data, uint32_t len, bool
         actual_length = tal_aes_get_actual_length(dec_data, dec_len);
         if (actual_length < 0) {
             PR_ERR("get actual length fail. %d", actual_length);
-            tal_free(dec_data);
-            return actual_length;
+            Free(dec_data);
+            return OPRT_COM_ERROR;
         }
     }
 
@@ -228,7 +250,7 @@ static OPERATE_RET __dl_decode_and_send_to_app(uint8_t *data, uint32_t len, bool
     trans.data = dec_data;
     rt         = s_file_dld_ctx.app.notify_cb(FILE_DL_TYPE_TRANS, &trans, NULL);
 
-    tal_free(dec_data);
+    Free(dec_data);
     return rt;
 }
 
@@ -236,7 +258,7 @@ static OPERATE_RET __dl_http_receive_data(http_session_t session, http_resp_t *p
 {
     OPERATE_RET rt       = OPRT_OK;
     int         unit_len = s_file_dld_ctx.app.unit_size ? s_file_dld_ctx.app.unit_size : DL_UNIT_LEN;
-    uint8_t    *buf      = tal_malloc(unit_len);
+    uint8_t    *buf      = Malloc(unit_len);
     TUYA_CHECK_NULL_RETURN(buf, OPRT_MALLOC_FAILED);
     memset(buf, 0, unit_len);
 
@@ -273,7 +295,7 @@ static OPERATE_RET __dl_http_receive_data(http_session_t session, http_resp_t *p
         have_read_len = 0;
     }
 
-    tal_free(buf);
+    Free(buf);
     s_file_dld_ctx.first_packet = 0;
     memset(s_file_dld_ctx.iv, 0, sizeof(s_file_dld_ctx.iv));
     return rt;
@@ -352,7 +374,7 @@ static OPERATE_RET __dl_get_file_from_cloud(char *filename)
         (0 == tuya_strncasecmp(config->provider, VENDOR_AMAZON_S3, strlen(VENDOR_AMAZON_S3)))) {
         url_len =
             strlen(config->bucket) + strlen(config->endpoint) + strlen(config->pathconfig) + strlen(filename) + 64;
-        url = tal_malloc(url_len);
+        url = Malloc(url_len);
         if (NULL == url) {
             PR_ERR("malloc url err %d", url_len);
             return OPRT_MALLOC_FAILED;
@@ -362,7 +384,7 @@ static OPERATE_RET __dl_get_file_from_cloud(char *filename)
     } else if (0 == tuya_strncasecmp(config->provider, VENDOR_AZURE_BLOB, strlen(VENDOR_AZURE_BLOB))) {
         url_len = strlen(config->ak) + strlen(config->endpoint) + strlen(config->bucket) + strlen(config->pathconfig) +
                   strlen(filename) + strlen(config->token) + 64;
-        url     = tal_malloc(url_len);
+        url     = Malloc(url_len);
         if (NULL == url) {
             PR_ERR("malloc url err %d", url_len);
             return OPRT_MALLOC_FAILED;
@@ -376,10 +398,10 @@ static OPERATE_RET __dl_get_file_from_cloud(char *filename)
     }
 
     int object_len = strlen(config->pathconfig) + strlen(filename) + 8;
-    config->object = tal_malloc(object_len);
+    config->object = Malloc(object_len);
     if (NULL == config->object) {
         PR_ERR("object malloc err");
-        tal_free(url);
+        Free(url);
         return OPRT_MALLOC_FAILED;
     }
     memset(config->object, 0, object_len);
@@ -387,8 +409,8 @@ static OPERATE_RET __dl_get_file_from_cloud(char *filename)
 
     PR_DEBUG("url:%s", url);
     rt = __dl_file_storage_http_get(url);
-    tal_free(url);
-    tal_free(config->object);
+    Free(url);
+    Free(config->object);
     config->object = NULL;
     PR_DEBUG("http dl from cloud rt:%d %d", rt, tal_net_get_errno());
 
@@ -421,7 +443,7 @@ OPERATE_RET __dl_storage_action(char *filename)
 static OPERATE_RET __dl_event_single_uploaded(cJSON *root)
 {
     OPERATE_RET rt  = OPRT_OK;
-    // uint32_t    idx = 0;
+    uint32_t    idx = 0;
 
     FILE_DL_TRANS_START_INFO_T start_info;
     memset(&start_info, 0, sizeof(FILE_DL_TRANS_START_INFO_T));
@@ -447,35 +469,41 @@ static OPERATE_RET __dl_event_single_uploaded(cJSON *root)
         }
     }
 
-    if (title && strlen(title->valuestring)) {
-        start_info.title = tal_malloc(strlen(title->valuestring) + 1);
+    if (cJSON_IsString(title) && title->valuestring && strlen(title->valuestring)) {
+        size_t title_len = strlen(title->valuestring);
+        start_info.title = Malloc(title_len + 1);
         TUYA_CHECK_NULL_GOTO(start_info.title, EXIT);
-        memset(start_info.title, 0, strlen(title->valuestring) + 1);
-        memcpy(start_info.title, title->valuestring, strlen(title->valuestring));
+        memset(start_info.title, 0, title_len + 1);
+        memcpy(start_info.title, title->valuestring, title_len);
     }
-    if (file_name && strlen(file_name->valuestring)) {
-        start_info.file_name = tal_malloc(strlen(file_name->valuestring) + 1);
+    if (cJSON_IsString(file_name) && file_name->valuestring && strlen(file_name->valuestring)) {
+        size_t fn_len = strlen(file_name->valuestring);
+        start_info.file_name = Malloc(fn_len + 1);
         TUYA_CHECK_NULL_GOTO(start_info.file_name, EXIT);
-        memset(start_info.file_name, 0, strlen(file_name->valuestring) + 1);
-        memcpy(start_info.file_name, file_name->valuestring, strlen(file_name->valuestring));
+        memset(start_info.file_name, 0, fn_len + 1);
+        memcpy(start_info.file_name, file_name->valuestring, fn_len);
     }
-    snprintf(start_info.meta, 64, "%s", meta->valuestring);
+    if (cJSON_IsString(meta) && meta->valuestring) {
+        snprintf(start_info.meta, sizeof(start_info.meta), "%s", meta->valuestring);
+    } else {
+        start_info.meta[0] = '\0';
+    }
     rt = s_file_dld_ctx.app.notify_cb(FILE_DL_TYPE_TRANS_START, &start_info, NULL);
 
-    // uint32_t frag_num = cJSON_GetArraySize(frag_fn);
-    // for (idx = 0; idx < frag_num; idx++) {
-    //     cJSON *cloud_file_name = cJSON_GetArrayItem(frag_fn, idx);
-    //     rt                     = __dl_storage_action(cloud_file_name->valuestring);
-    //     if (rt != OPRT_OK) {
-    //         break;
-    //     }
-    // }
-
-        rt = __dl_storage_action("d904d643-f2ef-470b-b99c-922ed8e71092");
+    uint32_t frag_num = cJSON_GetArraySize(frag_fn);
+    for (idx = 0; idx < frag_num; idx++) {
+        cJSON *cloud_file_name = cJSON_GetArrayItem(frag_fn, idx);
+        if (!cJSON_IsString(cloud_file_name) || NULL == cloud_file_name->valuestring) {
+            PR_ERR("frag_fn[%u] invalid", idx);
+            rt = OPRT_CJSON_GET_ERR;
+            break;
+        }
+        rt = __dl_storage_action(cloud_file_name->valuestring);
         if (rt != OPRT_OK) {
             PR_ERR("__dl_storage_action rt:%d", rt);
+            break;
         }
-
+    }
 
     PR_DEBUG("notify tans end rt:%d", rt);
     __dl_mq_rept(root, "downloaded", rt, NULL, NULL);
@@ -489,10 +517,10 @@ static OPERATE_RET __dl_event_single_uploaded(cJSON *root)
 
 EXIT:
     if (start_info.title) {
-        tal_free(start_info.title);
+        Free(start_info.title);
     }
     if (start_info.file_name) {
-        tal_free(start_info.file_name);
+        Free(start_info.file_name);
     }
     return rt;
 }
@@ -538,12 +566,12 @@ static OPERATE_RET __dl_event_query(cJSON *root)
     for (idx = 0; idx < fn_num; idx++) {
         cJSON                   *file_name = cJSON_GetArrayItem(real_fn, idx);
         FILE_DL_QUERY_DEL_INFO_T query     = {0};
-        query.file_name                    = tal_malloc(strlen(file_name->valuestring) + 1);
+        query.file_name                    = Malloc(strlen(file_name->valuestring) + 1);
         TUYA_CHECK_NULL_RETURN(query.file_name, OPRT_MALLOC_FAILED);
         memset(query.file_name, 0, strlen(file_name->valuestring) + 1);
         memcpy(query.file_name, file_name->valuestring, strlen(file_name->valuestring));
         rt = s_file_dld_ctx.app.notify_cb(FILE_DL_TYPE_QUERY, &query, NULL);
-        tal_free(query.file_name);
+        Free(query.file_name);
         __dl_mq_rept(root, "query", rt, file_name->valuestring, NULL);
     }
 
@@ -561,12 +589,12 @@ static OPERATE_RET __dl_event_delete(cJSON *root)
     for (idx = 0; idx < fn_num; idx++) {
         cJSON                   *file_name = cJSON_GetArrayItem(real_fn, idx);
         FILE_DL_QUERY_DEL_INFO_T del_info  = {0};
-        del_info.file_name                 = tal_malloc(strlen(file_name->valuestring) + 1);
+        del_info.file_name                 = Malloc(strlen(file_name->valuestring) + 1);
         TUYA_CHECK_NULL_RETURN(del_info.file_name, OPRT_MALLOC_FAILED);
         memset(del_info.file_name, 0, strlen(file_name->valuestring) + 1);
         memcpy(del_info.file_name, file_name->valuestring, strlen(file_name->valuestring));
         rt = s_file_dld_ctx.app.notify_cb(FILE_DL_TYPE_DELETE, &del_info, NULL);
-        tal_free(del_info.file_name);
+        Free(del_info.file_name);
         __dl_mq_rept(root, "delete", rt, file_name->valuestring, NULL);
     }
 
@@ -578,13 +606,18 @@ static void __dl_mq_work_cb(void *msg)
     char  *root_str = (char *)msg;
     PR_NOTICE("root_str:%s", root_str);
     cJSON *root     = cJSON_Parse(root_str);
-    tal_free(root_str);
+    Free(root_str);
     if (NULL == root) {
         PR_ERR("cjson parse err");
         return;
     }
 
     cJSON *event = cJSON_GetObjectItem(root, "event");
+    if (!cJSON_IsString(event) || NULL == event->valuestring) {
+        PR_ERR("event invalid");
+        cJSON_Delete(root);
+        return;
+    }
     PR_DEBUG("dl mq app handle event %s", event->valuestring);
     if (!strcmp(event->valuestring, "start")) {
         __dl_event_start(root);
@@ -637,7 +670,7 @@ static void __dl_mq_protocol_cb(tuya_protocol_event_t *ev)
 
     rt = tal_workq_schedule(WORKQ_SYSTEM, __dl_mq_work_cb, root_str);
     if (OPRT_OK != rt) {
-        tal_free(root_str);
+        Free(root_str);
         PR_ERR("schedule workq err,rt:%d", rt);
     }
 }
@@ -671,13 +704,13 @@ static int __dl_post_activate_event(void *data)
     cJSON *root = cJSON_CreateObject();
     TUYA_CHECK_NULL_RETURN(root, OPRT_MALLOC_FAILED);
     cJSON_AddStringToObject(root, "skill", skill_value);
-    tal_free(skill_value);
+    Free(skill_value);
     char *post_data = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);
     TUYA_CHECK_NULL_RETURN(post_data, OPRT_MALLOC_FAILED);
     cJSON *result = NULL;
     rt            = atop_service_comm_post_simple(ATOP_THING_TC_INIT, "2.0", post_data, NULL, &result);
-    tal_free(post_data);
+    Free(post_data);
     if (OPRT_OK != rt) {
         PR_ERR("get tc key err,rt:%d", rt);
         return rt;
