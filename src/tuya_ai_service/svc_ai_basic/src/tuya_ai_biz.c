@@ -592,7 +592,7 @@ OPERATE_RET __ai_parse_video_attr(CHAR_T *de_buf, UINT_T attr_len, AI_VIDEO_ATTR
         } else if (attr.type == AI_ATTR_DATA_ID) {
             // used in multi-stream mode to indicate the current stream id to the client
         } else {
-            PR_ERR("unknow attr type:%d", attr.type);
+            PR_WARN("unknow attr type:%d", attr.type);
         }
     }
     return rt;
@@ -643,7 +643,7 @@ OPERATE_RET __ai_parse_audio_attr(CHAR_T *de_buf, UINT_T attr_len, AI_AUDIO_ATTR
             audio->option.session_id_list = attr.value.str;
         } else if (attr.type == AI_ATTR_DATA_ID) {
         } else {
-            PR_ERR("unknow attr type:%d", attr.type);
+            PR_WARN("unknow attr type:%d", attr.type);
         }
     }
     return rt;
@@ -697,7 +697,7 @@ OPERATE_RET __ai_parse_image_attr(CHAR_T *de_buf, UINT_T attr_len, AI_IMAGE_ATTR
             image->option.session_id_list = attr.value.str;
         } else if (attr.type == AI_ATTR_DATA_ID) {
         } else {
-            PR_ERR("unknow attr type:%d", attr.type);
+            PR_WARN("unknow attr type:%d", attr.type);
         }
     }
     return rt;
@@ -753,7 +753,7 @@ OPERATE_RET __ai_parse_file_attr(CHAR_T *de_buf, UINT_T attr_len, AI_FILE_ATTR_T
             file->option.session_id_list = attr.value.str;
         } else if (attr.type == AI_ATTR_DATA_ID) {
         } else {
-            PR_ERR("unknow attr type:%d", attr.type);
+            PR_WARN("unknow attr type:%d", attr.type);
         }
     }
     if (file->base.file_name[0] == '\0') {
@@ -781,7 +781,7 @@ OPERATE_RET __ai_parse_text_attr(CHAR_T *de_buf, UINT_T attr_len, AI_TEXT_ATTR_T
             text->session_id_list = attr.value.str;
         } else if (attr.type == AI_ATTR_DATA_ID) {
         } else {
-            PR_ERR("unknow attr type:%d", attr.type);
+            PR_WARN("unknow attr type:%d", attr.type);
         }
     }
     return rt;
@@ -827,7 +827,7 @@ OPERATE_RET __ai_parse_event_attr(CHAR_T *de_buf, UINT_T attr_len, AI_EVENT_ATTR
         } else if (attr.type == AI_ATTR_UNASSIGN_DATAS) {
             event->unassign_datas = attr.value.str;
         } else {
-            PR_ERR("unknow attr type:%d", attr.type);
+            PR_WARN("unknow attr type:%d", attr.type);
         }
     }
     if ((0 == event->event_id[0]) || (0 == event->session_id[0])) {
@@ -859,7 +859,7 @@ OPERATE_RET __ai_parse_session_close_attr(CHAR_T *de_buf, UINT_T attr_len, AI_SE
             close->code = attr.value.u16;
             PR_NOTICE("close session err code:%d", close->code);
         } else {
-            PR_ERR("unknow attr type:%d", attr.type);
+            PR_WARN("unknow attr type:%d", attr.type);
         }
     }
     if (NULL == close->id) {
@@ -894,7 +894,7 @@ OPERATE_RET __ai_parse_session_state_attr(CHAR_T *de_buf, UINT_T attr_len, AI_SE
             state->user_data = attr.value.bytes;
             state->user_len  = attr.length;
         } else {
-            PR_ERR("unknow attr type:%d", attr.type);
+            PR_WARN("unknow attr type:%d", attr.type);
         }
     }
     if (NULL == state->id) {

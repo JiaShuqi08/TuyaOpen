@@ -171,8 +171,12 @@ STATIC AI_ATTR_PT __ai_get_attr_type(AI_ATTR_TYPE type)
         }
 
     }
-    PR_ERR("type %d not found ", type);
-    return OPRT_COM_ERROR;
+    /* Forward compatibility: the cloud may send attr types newer than
+     * this client knows about. Returning ATTR_PT_UNKNOWN lets the caller
+     * skip the unknown attr's value bytes and continue parsing the rest
+     * of the packet instead of dropping the whole message. */
+    PR_WARN("attr type %d unknown, skipping (cloud newer than client?)", type);
+    return ATTR_PT_UNKNOWN;
 }
 #endif
 
@@ -885,6 +889,14 @@ OPERATE_RET tuya_ai_get_attr_value(CHAR_T *de_buf, UINT_T *offset, AI_ATTRIBUTE_
         attr->value.bytes = (uint8_t *)(de_buf + *offset);
     } else if (payload_type == ATTR_PT_STR) {
         attr->value.str = de_buf + *offset;
+    } else if (payload_type == ATTR_PT_UNKNOWN) {
+        /* Forward-compat: an attr type the local table does not know
+         * about. We do not understand the value, but the wire still gives
+         * us its length so we can advance the cursor past it and keep
+         * parsing the remaining attrs in this packet. value.bytes is set
+         * for completeness; the caller's switch on attr->type will simply
+         * not match this attr and the default branch will log it. */
+        attr->value.bytes = (uint8_t *)(de_buf + *offset);
     } else {
         PR_ERR("unknow payload type:%d", attr->payload_type);
         return OPRT_COM_ERROR;
@@ -895,7 +907,10 @@ OPERATE_RET tuya_ai_get_attr_value(CHAR_T *de_buf, UINT_T *offset, AI_ATTRIBUTE_
         return OPRT_COM_ERROR;
     }
     *offset += attr->length;
-    if (!__ai_check_attr_vaild(attr)) {
+    /* Skip the validity check for unknown attr types — its length is
+     * defined by the server and we have no local schema to validate it
+     * against. */
+    if (payload_type != ATTR_PT_UNKNOWN && !__ai_check_attr_vaild(attr)) {
         PR_ERR("attr invaild, type:%d, payload_type:%d, length:%d", attr->type, attr->payload_type, attr->length);
         return OPRT_COM_ERROR;
     }

@@ -79,6 +79,13 @@ typedef BYTE_T AI_ATTR_PT;
 #define ATTR_PT_U64  0x04
 #define ATTR_PT_BYTES 0x05
 #define ATTR_PT_STR   0x06
+/* Sentinel: AI_VERSION=0x02 wire format omits the payload-type byte and
+ * relies on the local s_attr_type_array[] to map attr-type → payload-type.
+ * If the cloud sends a newer attr type that this client does not yet
+ * register, mark the payload-type as UNKNOWN so we can skip the attr's
+ * value bytes and continue parsing the rest of the message instead of
+ * dropping the whole packet (graceful forward compatibility). */
+#define ATTR_PT_UNKNOWN 0xFF
 
 typedef BYTE_T AI_PACKET_PT;
 #define AI_PT_CLIENT_HELLO 1
