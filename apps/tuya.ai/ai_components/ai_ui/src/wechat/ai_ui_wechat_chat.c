@@ -799,6 +799,13 @@ static void __ui_disp_link(bool is_ai, char *text, AI_UI_CHAT_LINK_CB cb, void *
 
     lv_obj_add_style(label, &sg_chat.style_link, LV_STATE_DEFAULT);
     lv_obj_add_flag(label, LV_OBJ_FLAG_CLICKABLE);
+    /* Link labels are usually a single line of small text — the default
+     * hit area equals the text bounding box, which is hard to tap on a
+     * touchscreen, especially when the label is nested inside scrollable
+     * containers (a small finger-drag gets swallowed as a scroll gesture
+     * before becoming a click). Extend the invisible hit area by ~12 px
+     * around the text so taps anywhere near the link still register. */
+    lv_obj_set_ext_click_area(label, 12);
 
     if (cb) {
         UI_LINK_CB_DATA_T *link_data = Malloc(sizeof(UI_LINK_CB_DATA_T));
