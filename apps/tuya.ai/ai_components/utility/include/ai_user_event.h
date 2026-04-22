@@ -65,8 +65,8 @@ typedef enum {
     AI_USER_EVT_PLAY_ALERT,
     AI_USER_EVT_MODE_SWITCH,
     AI_USER_EVT_MODE_STATE_UPDATE,
-    AI_USER_EVT_PICTURE_GENERATED, /* picture generated (received from cloud and saved to album) */
-    AI_USER_EVT_PRINT_PICTURE,     /* request to print a picture */
+    AI_USER_EVT_GENERATE_PICTURE, 
+    AI_USER_EVT_GET_PICTURE_FROM_APP, 
     AI_USER_EVT_SEND_PICTURE_END,
     AI_USER_EVT_EXIT,
 } AI_USER_EVT_TYPE_E;
