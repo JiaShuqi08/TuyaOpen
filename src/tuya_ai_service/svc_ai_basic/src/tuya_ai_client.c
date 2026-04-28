@@ -154,9 +154,9 @@ STATIC OPERATE_RET __ai_auth_resp(VOID)
     }
     ai_basic_client->heartbeat_lost_cnt = 0;
     tuya_ai_client_start_ping();
-    ai_basic_client->start_time        = tal_time_get_posix();
-    ai_basic_client->recv_biz_pkt      = false;
-    ai_basic_client->idle_check_enable = false;
+    ai_basic_client->start_time = tal_time_get_posix();
+    ai_basic_client->recv_biz_pkt = FALSE;
+    ai_basic_client->idle_check_enable = FALSE;
     tal_sw_timer_start(ai_basic_client->idle_check_timer, AI_IDLE_CHECK_TIME, TAL_TIMER_ONCE);
     __ai_client_set_state(AI_STATE_RUNNING);
     ty_publish_event(EVENT_AI_CLIENT_RUN, NULL);
@@ -183,9 +183,8 @@ STATIC VOID __ai_client_handle_err(OPERATE_RET rt)
 {
     if (ai_basic_client->state == AI_STATE_SETUP) {
         UINT_T sleep_random = 0;
-        UINT_T size         = AI_RECONN_TIME_NUM - 1;
-        sleep_random        = __ai_get_random_value(ai_basic_client->reconn[ai_basic_client->reconn_cnt].min,
-                                                    ai_basic_client->reconn[ai_basic_client->reconn_cnt].max);
+        UINT_T size = AI_RECONN_TIME_NUM - 1;
+        sleep_random = __ai_get_random_value(ai_basic_client->reconn[ai_basic_client->reconn_cnt].min, ai_basic_client->reconn[ai_basic_client->reconn_cnt].max);
         PR_NOTICE("connect to cloud failed, sleep %d s", sleep_random);
         tal_system_sleep(sleep_random * 1000);
         if (ai_basic_client->reconn_cnt >= size) {
@@ -193,7 +192,8 @@ STATIC VOID __ai_client_handle_err(OPERATE_RET rt)
         } else {
             ai_basic_client->reconn_cnt++;
         }
-    } else if ((ai_basic_client->state == AI_STATE_CONNECT) || (ai_basic_client->state == AI_STATE_AUTH_RESP)) {
+    } else if ((ai_basic_client->state == AI_STATE_CONNECT) || (ai_basic_client->state == AI_STATE_CLIENT_HELLO) ||
+               (ai_basic_client->state == AI_STATE_AUTH_REQ) || (ai_basic_client->state == AI_STATE_AUTH_RESP)) {
         tal_system_sleep(1000);
         __ai_client_set_state(AI_STATE_SETUP);
     } else if (ai_basic_client->state == AI_STATE_RUNNING) {
@@ -278,8 +278,8 @@ STATIC VOID __ai_delay_dis_req(VOID)
     PR_NOTICE("recv delay disconnect pkt");
     if (ai_basic_client) {
         if (!ai_basic_client->idle_check_enable) {
-            ai_basic_client->idle_check_enable = true;
-            ai_basic_client->recv_biz_pkt      = false;
+            ai_basic_client->idle_check_enable = TRUE;
+            ai_basic_client->recv_biz_pkt = FALSE;
             tal_sw_timer_start(ai_basic_client->idle_check_timer, AI_IDLE_CHECK_TIME, TAL_TIMER_ONCE);
         } else {
             PR_NOTICE("ai already in idle check mode");
@@ -295,23 +295,22 @@ STATIC VOID __ai_idle_check(TIMER_ID timer_id, VOID_T *data)
         return;
     }
     TIME_T now_time = tal_time_get_posix();
-    PR_NOTICE("ai idle check, enable:%d, recv pkt:%d", ai_basic_client->idle_check_enable,
-              ai_basic_client->recv_biz_pkt);
+    PR_NOTICE("ai idle check, enable:%d, recv pkt:%d", ai_basic_client->idle_check_enable, ai_basic_client->recv_biz_pkt);
     PR_NOTICE("ai client start time %d, now %d", ai_basic_client->start_time, now_time);
     if (ai_basic_client->idle_check_enable) {
         if (!ai_basic_client->recv_biz_pkt) {
             __ai_conn_close();
             return;
         } else {
-            ai_basic_client->recv_biz_pkt = false;
+            ai_basic_client->recv_biz_pkt = FALSE;
         }
     } else {
-        UINT_T random_value      = uni_random_range(6);
+        UINT_T random_value = uni_random_range(6);
         UINT_T continue_run_time = (12 + random_value) * 60 * 60;
         if ((now_time - ai_basic_client->start_time) > continue_run_time) {
             PR_NOTICE("ai continue run large than %d hours, start idle check", continue_run_time);
-            ai_basic_client->idle_check_enable = true;
-            ai_basic_client->recv_biz_pkt      = false;
+            ai_basic_client->idle_check_enable = TRUE;
+            ai_basic_client->recv_biz_pkt = FALSE;
         }
     }
     tal_sw_timer_start(ai_basic_client->idle_check_timer, AI_IDLE_CHECK_TIME, TAL_TIMER_ONCE);
@@ -356,13 +355,13 @@ STATIC OPERATE_RET __ai_running(VOID)
         } else if (pkt_type == AI_PT_DELAY_DISCONNECT) {
             __ai_delay_dis_req();
         } else {
-            ai_basic_client->recv_biz_pkt = true;
+            ai_basic_client->recv_biz_pkt = TRUE;
             if (ai_basic_client->cb) {
                 ai_basic_client->cb(de_buf, de_len, frag);
             }
         }
     } else {
-        ai_basic_client->recv_biz_pkt = true;
+        ai_basic_client->recv_biz_pkt = TRUE;
         if (ai_basic_client->cb) {
             ai_basic_client->cb(de_buf, de_len, frag);
         }
@@ -374,7 +373,8 @@ STATIC OPERATE_RET __ai_running(VOID)
 
 STATIC OPERATE_RET __ai_idle()
 {
-    if ((tuya_svc_netmgr_get_status() != NETWORK_STATUS_MQTT) || (tal_time_check_time_sync() != OPRT_OK)) {
+    if ((tuya_svc_netmgr_get_status() != NETWORK_STATUS_MQTT) ||
+        (tal_time_check_time_sync() != OPRT_OK)) {
         return OPRT_COM_ERROR;
     }
     __ai_client_set_state(AI_STATE_SETUP);
@@ -405,7 +405,7 @@ VOID tuya_ai_client_deinit(VOID)
 {
     if (ai_basic_client) {
         ty_publish_event(EVENT_AI_CLIENT_CLOSE, NULL);
-        ai_basic_client->terminate = true;
+        ai_basic_client->terminate = TRUE;
     }
 }
 
@@ -541,10 +541,10 @@ BOOL_T tuya_ai_client_is_ready(VOID)
 {
     if (ai_basic_client) {
         if (!(ai_basic_client->terminate) && ai_basic_client->state == AI_STATE_RUNNING) {
-            return true;
+            return TRUE;
         }
     }
-    return false;
+    return FALSE;
 }
 
 VOID tuya_ai_client_stop_ping(VOID)
@@ -579,12 +579,12 @@ STATIC OPERATE_RET __ai_client_save_ca(CHAR_T *url, UCHAR_T *ca, UINT_T len)
     return rt;
 }
 
-STATIC bool __ai_client_restore_ca(VOID *p_ctx, CHAR_T *url)
+STATIC BOOL_T __ai_client_restore_ca(VOID *p_ctx, CHAR_T *url)
 {
     OPERATE_RET           rt      = OPRT_OK;
     AI_SERVER_CFG_INFO_T *ser_cfg = tuya_ai_mq_ser_cfg_get();
     if (NULL == ser_cfg) {
-        return false;
+        return FALSE;
     }
 
     UINT_T  len = 0, idx = 0;
@@ -596,11 +596,11 @@ STATIC bool __ai_client_restore_ca(VOID *p_ctx, CHAR_T *url)
                 rt = tuya_tls_register_x509_crt_der(p_ctx, buffer, len);
                 PR_DEBUG("load url %s ca to tls %d", url, rt);
                 tal_kv_free(buffer);
-                return true;
+                return TRUE;
             }
         }
     }
-    return false;
+    return FALSE;
 }
 
 OPERATE_RET tuya_ai_client_init(AI_MQTT_RECV_CB cb, AI_SECURITY_CFG_T *security_cfg)
@@ -613,9 +613,10 @@ OPERATE_RET tuya_ai_client_init(AI_MQTT_RECV_CB cb, AI_SECURITY_CFG_T *security_
     TUYA_CHECK_NULL_RETURN(ai_basic_client, OPRT_MALLOC_FAILED);
 
     memset(ai_basic_client, 0, SIZEOF(AI_BASIC_CLIENT_T));
-    ai_basic_client->heartbeat_interval         = AI_HEARTBEAT_INTERVAL;
-    AI_RECONN_TIME_T reconn[AI_RECONN_TIME_NUM] = {{5, 10},   {10, 20},   {20, 40},  {40, 80},
-                                                   {80, 160}, {160, 320}, {320, 640}};
+    ai_basic_client->heartbeat_interval = AI_HEARTBEAT_INTERVAL;
+    AI_RECONN_TIME_T reconn[AI_RECONN_TIME_NUM] = {
+        {5, 10}, {10, 20}, {20, 40}, {40, 80}, {80, 160}, {160, 320}, {320, 640}
+    };
     memcpy(ai_basic_client->reconn, reconn, SIZEOF(reconn));
     memcpy(&ai_basic_client->security_cfg, security_cfg, SIZEOF(AI_SECURITY_CFG_T));
     tuya_ai_mq_init(cb);
