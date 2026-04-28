@@ -204,8 +204,7 @@ AI_ATTR_BASE_T *tuya_ai_agent_get_down_attr(VOID)
     return &ai_agent_ctx.down_attr;
 }
 
-STATIC OPERATE_RET __ai_direct_output(AI_PACKET_PT type, AI_BIZ_ATTR_INFO_T *attr, AI_BIZ_HEAD_INFO_T *head,
-                                      CHAR_T *data)
+STATIC OPERATE_RET __ai_direct_output(AI_PACKET_PT type, AI_BIZ_ATTR_INFO_T *attr, AI_BIZ_HEAD_INFO_T *head, CHAR_T *data)
 {
     OPERATE_RET rt = OPRT_OK;
     if (head->len == 0xFFFFFFFF) {
@@ -244,6 +243,11 @@ STATIC OPERATE_RET __ai_direct_output(AI_PACKET_PT type, AI_BIZ_ATTR_INFO_T *att
     return rt;
 }
 
+STATIC OPERATE_RET __ai_image_http_recv_cb(AI_BIZ_ATTR_INFO_T *attr, AI_BIZ_HEAD_INFO_T *head, VOID *data, VOID *usr_data)
+{
+    return __ai_direct_output(AI_PT_IMAGE, attr, head, (CHAR_T *)data);
+}
+
 STATIC OPERATE_RET __ai_image_recv_cb(AI_BIZ_ATTR_INFO_T *attr, AI_BIZ_HEAD_INFO_T *head, VOID *data, VOID *usr_data)
 {
     OPERATE_RET rt            = OPRT_OK;
@@ -263,7 +267,7 @@ STATIC OPERATE_RET __ai_image_recv_cb(AI_BIZ_ATTR_INFO_T *attr, AI_BIZ_HEAD_INFO
             if (img_type == IMAGE_PAYLOAD_TYPE_URL) {
                 memcpy(&ai_agent_ctx.down_attr.image, &attr->value.image, SIZEOF(AI_IMAGE_ATTR_T));
                 PR_NOTICE("download image from url:%d, %s", head->len, data);
-                return tuya_ai_http_dld_image(data, __ai_image_recv_cb);
+                return tuya_ai_http_dld_image(data, __ai_image_http_recv_cb);
             } else if (img_type == IMAGE_PAYLOAD_TYPE_BASE64) {
                 memcpy(&ai_agent_ctx.down_attr.image, &attr->value.image, SIZEOF(AI_IMAGE_ATTR_T));
                 decode_base64 = Malloc(head->len);
@@ -307,7 +311,7 @@ STATIC OPERATE_RET __ai_image_recv_cb(AI_BIZ_ATTR_INFO_T *attr, AI_BIZ_HEAD_INFO
             if (img_type == IMAGE_PAYLOAD_TYPE_URL) {
                 memcpy(&ai_agent_ctx.down_attr.image, &attr->value.image, SIZEOF(AI_IMAGE_ATTR_T));
                 PR_NOTICE("download image from url:%d, %s", head->len, data);
-                return tuya_ai_http_dld_image(data, __ai_image_recv_cb);
+                return tuya_ai_http_dld_image(data, __ai_image_http_recv_cb);
             } else if (img_type == IMAGE_PAYLOAD_TYPE_BASE64) {
                 memcpy(&ai_agent_ctx.down_attr.image, &attr->value.image, SIZEOF(AI_IMAGE_ATTR_T));
                 decode_base64 = Malloc(head->len);
@@ -348,8 +352,10 @@ STATIC OPERATE_RET __ai_image_recv_cb(AI_BIZ_ATTR_INFO_T *attr, AI_BIZ_HEAD_INFO
             goto EXIT;
         }
         UINT32_T gcm_len = 0;
-        rt = tal_aes_gcm_decode(key, TUYA_AI_SECRET_KEY_LEN, head->value.image.iv, AI_IV_LEN, NULL, 0,
-                                (UINT8_T *)eff_data, cipher_len, (UINT8_T *)dec_data, &gcm_len, tag, AI_GCM_TAG_LEN);
+        rt = tal_aes_gcm_decode(key, TUYA_AI_SECRET_KEY_LEN, head->value.image.iv, AI_IV_LEN,
+                                NULL, 0, (UINT8_T *)eff_data, cipher_len,
+                                (UINT8_T *)dec_data, &gcm_len,
+                                tag, AI_GCM_TAG_LEN);
         if (rt != OPRT_OK) {
             PR_ERR("image gcm decode err:%d", rt);
             goto EXIT;
@@ -389,10 +395,11 @@ STATIC OPERATE_RET __ai_video_recv_cb(AI_BIZ_ATTR_INFO_T *attr, AI_BIZ_HEAD_INFO
             PR_ERR("malloc video decrypt buf failed");
             return OPRT_MALLOC_FAILED;
         }
-        UINT32_T    dec_len = 0;
-        OPERATE_RET rt =
-            tal_aes_gcm_decode(key, TUYA_AI_SECRET_KEY_LEN, head->value.video.iv, AI_IV_LEN, NULL, 0, (UINT8_T *)data,
-                               cipher_len, (UINT8_T *)plaintext, &dec_len, tag, AI_GCM_TAG_LEN);
+        UINT32_T dec_len = 0;
+        OPERATE_RET rt = tal_aes_gcm_decode(key, TUYA_AI_SECRET_KEY_LEN, head->value.video.iv, AI_IV_LEN,
+                                            NULL, 0, (UINT8_T *)data, cipher_len,
+                                            (UINT8_T *)plaintext, &dec_len,
+                                            tag, AI_GCM_TAG_LEN);
         if (rt != OPRT_OK) {
             PR_ERR("video gcm decode err:%d", rt);
             Free(plaintext);
@@ -534,9 +541,10 @@ STATIC OPERATE_RET __ai_parse_dev_ctrl(ty_cJSON *root, ty_cJSON **dp_json)
     ty_cJSON *dps = NULL, *action = NULL;
 
     // only parse general skill with action "set"
-    if (skill_general && (dps = ty_cJSON_GetObjectItem(skill_general, "data")) &&
-        (action = ty_cJSON_GetObjectItem(skill_general, "action")) && action->valuestring &&
-        strcmp(action->valuestring, "set") == 0) {
+    if (skill_general &&
+        (dps = ty_cJSON_GetObjectItem(skill_general, "data")) &&
+        (action = ty_cJSON_GetObjectItem(skill_general, "action")) &&
+        action->valuestring && strcmp(action->valuestring, "set") == 0) {
         *dp_json = dps;
         return OPRT_OK;
     }
@@ -549,7 +557,8 @@ STATIC OPERATE_RET __ai_parse_speech_control(ty_cJSON *root, BOOL_T *exit)
     ty_cJSON *skill_general = ty_cJSON_GetObjectItem(root, "general");
     ty_cJSON *action        = NULL;
 
-    if (skill_general && (action = ty_cJSON_GetObjectItem(skill_general, "action"))) {
+    if (skill_general &&
+        (action = ty_cJSON_GetObjectItem(skill_general, "action"))) {
         if (action->valuestring && strcmp(action->valuestring, "exit") == 0) {
             *exit = TRUE;
             return OPRT_OK;
@@ -783,8 +792,7 @@ STATIC UINT_T __ai_agent_find_free_sid(VOID)
     return AI_SESSION_MAX_NUM;
 }
 
-STATIC VOID __ai_agent_set_sid(AI_AGENT_SESSION_T *session, CHAR_T *scode, AI_SESSION_ID id, AI_SESSION_CFG_T *cfg,
-                               CHAR_T *token)
+STATIC VOID __ai_agent_set_sid(AI_AGENT_SESSION_T *session, CHAR_T *scode, AI_SESSION_ID id, AI_SESSION_CFG_T *cfg, CHAR_T *token)
 {
     if (!scode) {
         return;
@@ -808,7 +816,8 @@ STATIC VOID __ai_agent_del_sid(AI_SESSION_ID id)
 {
     UINT_T idx = 0;
     for (idx = 0; idx < AI_SESSION_MAX_NUM; idx++) {
-        if (ai_agent_ctx.session[idx].sid[0] != '\0' && !strcmp(ai_agent_ctx.session[idx].sid, id)) {
+        if (ai_agent_ctx.session[idx].sid[0] != '\0' &&
+            !strcmp(ai_agent_ctx.session[idx].sid, id)) {
             memset(&ai_agent_ctx.session[idx], 0, SIZEOF(AI_AGENT_SESSION_T));
             PR_DEBUG("del session idx:%d", idx);
             break;
@@ -870,8 +879,9 @@ AI_BIZ_RECV_CB tuya_ai_agent_get_recv_cb(CHAR_T *scode, AI_PACKET_PT type)
 {
     UINT_T idx = 0, jdx = 0;
     for (idx = 0; idx < AI_SESSION_MAX_NUM; idx++) {
-        if (ai_agent_ctx.recv[idx] && ((!scode && ai_agent_ctx.recv[idx]->scode[0] == 0) ||
-                                       (scode && strcmp(ai_agent_ctx.recv[idx]->scode, scode) == 0))) {
+        if (ai_agent_ctx.recv[idx] &&
+            ((!scode && ai_agent_ctx.recv[idx]->scode[0] == 0) ||
+                (scode && strcmp(ai_agent_ctx.recv[idx]->scode, scode) == 0))) {
             for (jdx = 0; jdx < AI_BIZ_MAX_NUM; jdx++) {
                 if (ai_agent_ctx.recv[idx]->arc[jdx].type == type) {
                     PR_DEBUG("get recv cb idx:%d, scode:%s, type:%d", idx, ai_agent_ctx.recv[idx]->scode, type);
@@ -899,8 +909,9 @@ AI_EVENT_CB tuya_ai_agent_get_evt_cb(CHAR_T *scode)
 {
     UINT_T idx = 0;
     for (idx = 0; idx < AI_SESSION_MAX_NUM; idx++) {
-        if (ai_agent_ctx.recv[idx] && ((!scode && ai_agent_ctx.recv[idx]->scode[0] == 0) ||
-                                       (scode && strcmp(ai_agent_ctx.recv[idx]->scode, scode) == 0))) {
+        if (ai_agent_ctx.recv[idx] &&
+            ((!scode && ai_agent_ctx.recv[idx]->scode[0] == 0) ||
+                (scode && strcmp(ai_agent_ctx.recv[idx]->scode, scode) == 0))) {
             return ai_agent_ctx.recv[idx]->event_cb;
         }
     }
@@ -986,23 +997,19 @@ OPERATE_RET tuya_ai_agent_crt_session(CHAR_T *scode, UINT_T bizCode, UINT64_T bi
         out_len = attr_len;
     } else {
 #if defined(AI_VERSION) && (0x01 == AI_VERSION)
-        // pack tts attributes:
-        // {"tts.order.supports":[{"format":"mp3","container":"","sampleRate":16000,"bitDepth":"16","channels":1}]}
+        // pack tts attributes: {"tts.order.supports":[{"format":"mp3","container":"","sampleRate":16000,"bitDepth":"16","channels":1}]}
         ty_cJSON *root = ty_cJSON_CreateObject();
-        ty_cJSON *tts  = ty_cJSON_AddArrayToObject(root, "tts.order.supports");
+        ty_cJSON *tts = ty_cJSON_AddArrayToObject(root, "tts.order.supports");
         ty_cJSON *item = ty_cJSON_CreateObject();
         ty_cJSON_AddStringToObject(item, "format", ai_agent_ctx.tts_cfg.format ? ai_agent_ctx.tts_cfg.format : "mp3");
         ty_cJSON_AddStringToObject(item, "container", "");
-        ty_cJSON_AddNumberToObject(item, "sampleRate",
-                                   ai_agent_ctx.tts_cfg.sample_rate ? ai_agent_ctx.tts_cfg.sample_rate : 16000);
+        ty_cJSON_AddNumberToObject(item, "sampleRate", ai_agent_ctx.tts_cfg.sample_rate ? ai_agent_ctx.tts_cfg.sample_rate : 16000);
         ty_cJSON_AddNumberToObject(item, "bitDepth", 16);
         ty_cJSON_AddNumberToObject(item, "channels", 1);
         if (ai_agent_ctx.tts_cfg.format && strcmp(ai_agent_ctx.tts_cfg.format, "opus") == 0) {
-            ty_cJSON_AddNumberToObject(item, "bitRate",
-                                       ai_agent_ctx.tts_cfg.bit_rate ? ai_agent_ctx.tts_cfg.bit_rate : 16000);
+            ty_cJSON_AddNumberToObject(item, "bitRate", ai_agent_ctx.tts_cfg.bit_rate ? ai_agent_ctx.tts_cfg.bit_rate : 16000);
         } else {
-            ty_cJSON_AddNumberToObject(item, "bitRate",
-                                       ai_agent_ctx.tts_cfg.bit_rate ? ai_agent_ctx.tts_cfg.bit_rate : 64000);
+            ty_cJSON_AddNumberToObject(item, "bitRate", ai_agent_ctx.tts_cfg.bit_rate ? ai_agent_ctx.tts_cfg.bit_rate : 64000);
         }
         ty_cJSON_AddItemToArray(tts, item);
         // pack mcp tools attributes: {"supportCustomMCP":true}
@@ -1015,13 +1022,18 @@ OPERATE_RET tuya_ai_agent_crt_session(CHAR_T *scode, UINT_T bizCode, UINT64_T bi
         CHAR_T *session_attrs = ty_cJSON_PrintUnformatted(root);
         PR_DEBUG("session attrs: %s", session_attrs);
 
-        AI_ATTRIBUTE_T def_attr[2] = {{.type = 1003, .payload_type = ATTR_PT_U8, .length = 1, .value.u8 = 2},
-                                      {
-                                          .type         = 1004, /* sessionAttributes */
-                                          .payload_type = ATTR_PT_STR,
-                                          .length       = strlen(session_attrs),
-                                          .value.str    = session_attrs,
-                                      }};
+        AI_ATTRIBUTE_T def_attr[2] = {{
+                .type = 1003,
+                .payload_type = ATTR_PT_U8,
+                .length = 1,
+                .value.u8 = 2
+            }, {
+                .type = 1004,       /* sessionAttributes */
+                .payload_type = ATTR_PT_STR,
+                .length = strlen(session_attrs),
+                .value.str = session_attrs,
+            }
+        };
         tuya_pack_user_attrs(def_attr, CNTSOF(def_attr), &out, &out_len);
         Free(session_attrs);
         ty_cJSON_Delete(root);
@@ -1043,18 +1055,14 @@ OPERATE_RET tuya_ai_agent_crt_session(CHAR_T *scode, UINT_T bizCode, UINT64_T bi
         ty_cJSON_AddStringToObject(supportItem, "bitDepth", "16");
         // bitRate
         if (ai_agent_ctx.tts_cfg.format && strcmp(ai_agent_ctx.tts_cfg.format, "opus") == 0) {
-            ty_cJSON_AddNumberToObject(supportItem, "bitRate",
-                                       ai_agent_ctx.tts_cfg.bit_rate == 0 ? 16000 : (ai_agent_ctx.tts_cfg.bit_rate));
+            ty_cJSON_AddNumberToObject(supportItem, "bitRate", ai_agent_ctx.tts_cfg.bit_rate == 0 ? 16000 : (ai_agent_ctx.tts_cfg.bit_rate));
         } else {
-            ty_cJSON_AddNumberToObject(supportItem, "bitRate",
-                                       ai_agent_ctx.tts_cfg.bit_rate == 0 ? 64000 : (ai_agent_ctx.tts_cfg.bit_rate));
+            ty_cJSON_AddNumberToObject(supportItem, "bitRate", ai_agent_ctx.tts_cfg.bit_rate == 0 ? 64000 : (ai_agent_ctx.tts_cfg.bit_rate));
         }
-        // format
-        ty_cJSON_AddStringToObject(supportItem, "format",
-                                   (ai_agent_ctx.tts_cfg.format ? ai_agent_ctx.tts_cfg.format : "mp3"));
-        // sampleRate
-        ty_cJSON_AddNumberToObject(supportItem, "sampleRate",
-                                   ai_agent_ctx.tts_cfg.sample_rate == 0 ? 16000 : ai_agent_ctx.tts_cfg.sample_rate);
+        //format
+        ty_cJSON_AddStringToObject(supportItem, "format", (ai_agent_ctx.tts_cfg.format ? ai_agent_ctx.tts_cfg.format : "mp3"));
+        //sampleRate
+        ty_cJSON_AddNumberToObject(supportItem, "sampleRate", ai_agent_ctx.tts_cfg.sample_rate == 0 ? 16000 : ai_agent_ctx.tts_cfg.sample_rate);
 
         // pack mcp tools attributes: {"supportCustomMCP":true}
         if (ai_agent_ctx.enable_mcp) {
@@ -1414,8 +1422,7 @@ VOID tuya_ai_agent_set_video_stream(AI_VIDEO_STREAM_E stream_type)
     ai_agent_ctx.video_stream = stream_type;
 }
 
-STATIC OPERATE_RET __ai_upload_stream(CHAR_T *scode, AI_PACKET_PT ptype, AI_BIZ_HD_T *biz, CHAR_T *data, UINT_T len,
-                                      UINT_T total_len)
+STATIC OPERATE_RET __ai_upload_stream(CHAR_T *scode, AI_PACKET_PT ptype, AI_BIZ_HD_T *biz, CHAR_T *data, UINT_T len, UINT_T total_len)
 {
     if (ai_agent_ctx.enable_joyinside) {
         PR_DEBUG("[ptype %d upload stream] len:%d, total_len:%d", ptype, len, total_len);
@@ -1496,8 +1503,8 @@ STATIC OPERATE_RET __upload_data_cb(AI_AUDIO_CODEC_TYPE codec_type, UCHAR_T *dat
     AUDIO_ENCODE_CTX_T *encode_ctx = (AUDIO_ENCODE_CTX_T *)usr_data;
 
     if ((encode_ctx->buf_len + len) > encode_ctx->buf_size) {
-        OPERATE_RET rt = __ai_upload_stream(encode_ctx->scode, AI_PT_AUDIO, encode_ctx->biz, (CHAR_T *)encode_ctx->buf,
-                                            encode_ctx->buf_len, encode_ctx->buf_len);
+        OPERATE_RET rt = __ai_upload_stream(encode_ctx->scode, AI_PT_AUDIO, encode_ctx->biz,
+                                            (CHAR_T *)encode_ctx->buf, encode_ctx->buf_len, encode_ctx->buf_len);
         if (rt != OPRT_OK) {
             PR_ERR("upload encoded data failed, rt:%d", rt);
             return rt;
@@ -1515,8 +1522,7 @@ STATIC OPERATE_RET __upload_data_cb(AI_AUDIO_CODEC_TYPE codec_type, UCHAR_T *dat
     return OPRT_OK;
 }
 
-OPERATE_RET tuya_ai_agent_upload_stream(CHAR_T *scode, AI_PACKET_PT ptype, AI_BIZ_HD_T *biz, CHAR_T *data, UINT_T len,
-                                        UINT_T total_len)
+OPERATE_RET tuya_ai_agent_upload_stream(CHAR_T *scode, AI_PACKET_PT ptype, AI_BIZ_HD_T *biz, CHAR_T *data, UINT_T len, UINT_T total_len)
 {
     if (ptype == AI_PT_AUDIO && ai_agent_ctx.encoder) {
         if (ai_agent_ctx.encoder->handle == NULL) {
@@ -1536,15 +1542,14 @@ OPERATE_RET tuya_ai_agent_upload_stream(CHAR_T *scode, AI_PACKET_PT ptype, AI_BI
                 .buf_size = AUDIO_ENCODE_BUF_SIZE,
                 .buf_len  = 0,
             };
-            OPERATE_RET rt = ai_agent_ctx.encoder->encode(ai_agent_ctx.encoder->handle, (UCHAR_T *)data, len,
-                                                          __upload_data_cb, (VOID *)&encode_ctx);
+            OPERATE_RET rt = ai_agent_ctx.encoder->encode(ai_agent_ctx.encoder->handle, (UCHAR_T *)data, len, __upload_data_cb, (VOID *)&encode_ctx);
             if (rt != OPRT_OK) {
                 PR_ERR("encoder failed, rt:%d", rt);
                 return rt;
             }
             if (encode_ctx.buf_len > 0) {
-                rt = __ai_upload_stream(encode_ctx.scode, AI_PT_AUDIO, encode_ctx.biz, (CHAR_T *)encode_ctx.buf,
-                                        encode_ctx.buf_len, encode_ctx.buf_len);
+                rt = __ai_upload_stream(encode_ctx.scode, AI_PT_AUDIO, encode_ctx.biz,
+                                        (CHAR_T *)encode_ctx.buf, encode_ctx.buf_len, encode_ctx.buf_len);
             }
             return rt;
         } else {
@@ -1584,14 +1589,16 @@ STATIC OPERATE_RET __ai_event_start(AI_SESSION_ID sid, AI_SESSION_ID eid)
     CHAR_T start_attr[128] = {0};
     snprintf(start_attr, sizeof(start_attr),
              "{\"tts.alternate\":\"true\",\"asr.enableVad\":%s,\"processing.interrupt\":%s}",
-             ai_agent_ctx.enable_serv_vad ? "true" : "false", ai_agent_ctx.enable_proc_intr ? "true" : "false");
+             ai_agent_ctx.enable_serv_vad ? "true" : "false",
+             ai_agent_ctx.enable_proc_intr ? "true" : "false");
 
     AI_ATTRIBUTE_T attr[] = {{
-        .type         = 1003,
-        .payload_type = ATTR_PT_STR,
-        .length       = strlen(start_attr),
-        .value.str    = start_attr,
-    }};
+            .type = 1003,
+            .payload_type = ATTR_PT_STR,
+            .length = strlen(start_attr),
+            .value.str = start_attr,
+        }
+    };
 
     tuya_pack_user_attrs(attr, CNTSOF(attr), &out, &out_len);
 #else

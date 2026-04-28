@@ -158,8 +158,6 @@ STATIC VOID __ai_output_thread(void* arg)
         case AI_OUTPUT_STOPPED: {
             ai_output_ctx.offset = 0;
             if (last_state != AI_OUTPUT_STOPPED) {
-                tal_system_sleep(300); // wait for audio output done
-
                 tal_mutex_lock(ai_output_ctx.mutex);
                 tuya_ai_output_event(AI_EVENT_END, AI_PT_AUDIO, NULL);
                 tal_mutex_unlock(ai_output_ctx.mutex);

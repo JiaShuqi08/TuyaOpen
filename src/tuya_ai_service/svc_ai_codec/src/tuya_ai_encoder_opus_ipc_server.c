@@ -1,4 +1,3 @@
-#include "tuya_ai_encoder_opus.h"
 #include "tuya_ai_encoder_opus_ipc_server.h"
 #include "tuya_error_code.h"
 #include "tal_system.h"

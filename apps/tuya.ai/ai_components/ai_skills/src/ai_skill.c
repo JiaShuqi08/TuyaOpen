@@ -109,7 +109,7 @@ static OPERATE_RET __ai_skills_process(cJSON *root, bool eof)
  * @param eof End of file flag indicating if this is the last data chunk.
  * @return OPERATE_RET Operation result code.
  */
-static OPERATE_RET __ai_asr_process(cJSON *root, bool eof)
+static OPERATE_RET __ai_asr_process(cJSON *root, BOOL_T eof)
 {
     const char *content = __json_get_string(root);
     if (!content) {
@@ -151,6 +151,18 @@ static OPERATE_RET __ai_nlg_process(cJSON *root, bool eof)
 
     /* Send data to register callback */
     static AI_USER_EVT_TYPE_E event_type = AI_USER_EVT_TEXT_STREAM_STOP;
+    // Detect new stream start after interruption:
+    // If we're in DATA state but receive a non-empty START packet, reset state machine
+    if(event_type == AI_USER_EVT_TEXT_STREAM_DATA && !eof && strlen(content) > 0) {
+        // Check if this looks like a new stream (e.g., timeIndex is small or content starts fresh)
+        cJSON *time_idx = cJSON_GetObjectItem(root, "timeIndex");
+        if (time_idx && time_idx->valueint < 1000) {
+            // Likely a new conversation round after interrupt
+            PR_NOTICE("[NLG] Detected new stream after interrupt, resetting state");
+            event_type = AI_USER_EVT_TEXT_STREAM_STOP;
+        }
+    }
+
     if(event_type == AI_USER_EVT_TEXT_STREAM_STOP) {
         if(eof) {
             if(strlen(content) > 0) {
@@ -194,7 +206,7 @@ static OPERATE_RET __ai_nlg_process(cJSON *root, bool eof)
  * @param eof End of file flag indicating if this is the last data chunk.
  * @return OPERATE_RET Operation result code.
  */
-OPERATE_RET ai_text_process(AI_TEXT_TYPE_E type, cJSON *root, bool eof)
+OPERATE_RET ai_text_process(AI_TEXT_TYPE_E type, cJSON *root, BOOL_T eof)
 {    
     TUYA_CHECK_NULL_RETURN(root, OPRT_INVALID_PARM);
 

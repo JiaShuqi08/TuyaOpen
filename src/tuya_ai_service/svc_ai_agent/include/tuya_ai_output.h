@@ -80,7 +80,7 @@ typedef struct {
     /** recv media data */
     OPERATE_RET (*media_data_cb)(AI_PACKET_PT type, CHAR_T *data, UINT_T len, UINT_T total_len);
     /** recv text stream */
-    OPERATE_RET (*text_cb)(AI_TEXT_TYPE_E type, ty_cJSON *root, bool eof);
+    OPERATE_RET(*text_cb)(AI_TEXT_TYPE_E type, ty_cJSON *root, BOOL_T eof);
     /** recv alert */
     OPERATE_RET (*alert_cb)(AI_ALERT_TYPE_E type);
 } AI_OUTPUT_CBS_T;

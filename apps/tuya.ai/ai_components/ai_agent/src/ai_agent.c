@@ -157,7 +157,7 @@ OPERATE_RET __ai_agent_media_data_cb(AI_PACKET_PT type, char *data, uint32_t len
 @param eof End of file flag
 @return OPERATE_RET Operation result
 */
-OPERATE_RET __ai_agent_text_cb(AI_TEXT_TYPE_E type, cJSON *root, bool eof)
+OPERATE_RET __ai_agent_text_cb(AI_TEXT_TYPE_E type, cJSON *root, BOOL_T eof)
 {    
     return ai_text_process(type, root, eof);
 }
