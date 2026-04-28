@@ -103,6 +103,7 @@ STATIC AI_PACKET_WRITER_T s_default_packet_writer = {
 
 #if defined(AI_VERSION) && (0x02 == AI_VERSION)
 STATIC AI_ATTR_TYPE_INFO s_attr_type_array[] = {
+    {AI_ATTR_PKT_PAYLOAD_LEN,           ATTR_PT_U32},
     {AI_ATTR_SECURITY_SUIT,             ATTR_PT_BYTES},
     {AI_ATTR_CLIENT_TYPE,               ATTR_PT_U8},
     {AI_ATTR_CLIENT_ID,                 ATTR_PT_STR},
@@ -171,12 +172,8 @@ STATIC AI_ATTR_PT __ai_get_attr_type(AI_ATTR_TYPE type)
         }
 
     }
-    /* Forward compatibility: the cloud may send attr types newer than
-     * this client knows about. Returning ATTR_PT_UNKNOWN lets the caller
-     * skip the unknown attr's value bytes and continue parsing the rest
-     * of the packet instead of dropping the whole message. */
-    PR_WARN("attr type %d unknown, skipping (cloud newer than client?)", type);
-    return ATTR_PT_UNKNOWN;
+    PR_ERR("type %d not found ", type);
+    return OPRT_COM_ERROR;
 }
 #endif
 
@@ -889,17 +886,9 @@ OPERATE_RET tuya_ai_get_attr_value(CHAR_T *de_buf, UINT_T *offset, AI_ATTRIBUTE_
         attr->value.bytes = (uint8_t *)(de_buf + *offset);
     } else if (payload_type == ATTR_PT_STR) {
         attr->value.str = de_buf + *offset;
-    } else if (payload_type == ATTR_PT_UNKNOWN) {
-        /* Forward-compat: an attr type the local table does not know
-         * about. We do not understand the value, but the wire still gives
-         * us its length so we can advance the cursor past it and keep
-         * parsing the remaining attrs in this packet. value.bytes is set
-         * for completeness; the caller's switch on attr->type will simply
-         * not match this attr and the default branch will log it. */
-        attr->value.bytes = (uint8_t *)(de_buf + *offset);
     } else {
         PR_ERR("unknow payload type:%d", attr->payload_type);
-        return OPRT_COM_ERROR;
+        return OPRT_OK;
     }
 
     if (*offset + attr->length < *offset) {
@@ -907,10 +896,7 @@ OPERATE_RET tuya_ai_get_attr_value(CHAR_T *de_buf, UINT_T *offset, AI_ATTRIBUTE_
         return OPRT_COM_ERROR;
     }
     *offset += attr->length;
-    /* Skip the validity check for unknown attr types — its length is
-     * defined by the server and we have no local schema to validate it
-     * against. */
-    if (payload_type != ATTR_PT_UNKNOWN && !__ai_check_attr_vaild(attr)) {
+    if (!__ai_check_attr_vaild(attr)) {
         PR_ERR("attr invaild, type:%d, payload_type:%d, length:%d", attr->type, attr->payload_type, attr->length);
         return OPRT_COM_ERROR;
     }
@@ -1643,6 +1629,32 @@ STATIC BOOL_T __ai_basic_get_frag_flag()
     return ai_basic_proto->frag_flag;
 }
 
+STATIC OPERATE_RET __ai_get_payload_len_from_attr(CHAR_T *attr_buf, UINT_T attr_len, UINT_T *payload_len)
+{
+    OPERATE_RET rt = OPRT_OK;
+    UINT_T offset = 0;
+    AI_ATTRIBUTE_T attr = {0};
+    if (attr_buf == NULL || payload_len == NULL || attr_len == 0) {
+        PR_ERR("invalid param, attr_buf:%p, payload_len:%p, attr_len:%d", attr_buf, payload_len, attr_len);
+        return OPRT_COM_ERROR;
+    }
+
+    while (offset < attr_len) {
+        memset(&attr, 0, SIZEOF(AI_ATTRIBUTE_T));
+        rt = tuya_ai_get_attr_value(attr_buf, &offset, &attr);
+        if (OPRT_OK != rt) {
+            PR_ERR("get attr value failed, rt:%d", rt);
+            return rt;
+        }
+        if (attr.type == AI_ATTR_PKT_PAYLOAD_LEN) {
+            *payload_len = attr.value.u32;
+            AI_PROTO_D("get attr pkt payload len:%u", *payload_len);
+            return OPRT_OK;
+        }
+    }
+    return OPRT_COM_ERROR;
+}
+
 OPERATE_RET tuya_ai_basic_pkt_read(CHAR_T **out, UINT_T *out_len, AI_FRAG_FLAG *out_frag)
 {
     OPERATE_RET rt = OPRT_OK;
@@ -1775,8 +1787,18 @@ OPERATE_RET tuya_ai_basic_pkt_read(CHAR_T **out, UINT_T *out_len, AI_FRAG_FLAG *
                 frag_offset += SIZEOF(attr_len);
                 attr_len = UNI_NTOHL(attr_len);
                 frag_offset += attr_len;
+#if defined(AI_VERSION) && (0x01 == AI_VERSION)
                 memcpy(&origin_len, decrypt_buf + frag_offset, SIZEOF(origin_len));
                 origin_len = UNI_NTOHL(origin_len);
+#else
+                rt = __ai_get_payload_len_from_attr(decrypt_buf + SIZEOF(AI_PAYLOAD_HEAD_T) + SIZEOF(attr_len), attr_len, &origin_len);
+                if (OPRT_OK != rt) {
+                    /* cloud may omit type-9 attr; fall back to fixed-position origin_len */
+                    memcpy(&origin_len, decrypt_buf + frag_offset, SIZEOF(origin_len));
+                    origin_len = UNI_NTOHL(origin_len);
+                    PR_WARN("type-9 attr absent, fallback origin_len:%u", origin_len);
+                }
+#endif
                 AI_PROTO_D("recv start frag packet with attr, origin len:%d", origin_len);
             } else {
                 memcpy(&origin_len, decrypt_buf + SIZEOF(AI_PAYLOAD_HEAD_T), SIZEOF(origin_len));
