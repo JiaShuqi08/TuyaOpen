@@ -312,7 +312,7 @@ static OPERATE_RET legacy_mbedtls_cacert_load(mbedtls_x509_crt *chain, char *hos
         snprintf(whole_hostname, SIZEOF(whole_hostname), "%s", hostname);
     }
 
-    ret = tuya_cert_manager_load(whole_hostname, (CERT_PARSE_CB)mbedtls_x509_crt_parse, (VOID_T *)chain);
+    ret = tuya_cert_manager_load(whole_hostname, (CERT_PARSE_CB)mbedtls_x509_crt_parse, (void *)chain);
     if (ret != 0) {
         PR_ERR("cert load fail, ret: %x", ret);
     }

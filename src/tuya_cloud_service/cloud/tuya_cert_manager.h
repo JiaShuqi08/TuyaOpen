@@ -203,7 +203,7 @@ typedef OPERATE_RET (*TUYA_CERT_SAVE_CB)(char *url, uint8_t *ca, uint32_t len);
  * @return TRUE/FALSE
  *
  */
-typedef bool (*TUYA_CERT_RESTORE_CB)(void *p_ctx, char *url);
+typedef BOOL_T (*TUYA_CERT_RESTORE_CB)(void *p_ctx, char *url);
 
 /**
  * reg save and restore cb
