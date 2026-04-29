@@ -100,6 +100,7 @@ typedef struct {
 ***********************************************************/
 static AI_UI_WECHAT_CHAT_T sg_chat = {0};
 static uint8_t *sg_picture_buffer = NULL;
+static lv_timer_t *sg_image_auto_return_tm = NULL;
 
 /***********************************************************
 ***********************function define**********************
@@ -316,14 +317,30 @@ static void __picture_attach_btn_cb(lv_event_t *e)
 /**
  * @brief Click picture canvas — hide picture view, show chat content.
  */
-static void __return_chat_content_event_cb(lv_event_t *e)
+static void __do_return_chat_content(void)
 {
-    PR_NOTICE("picture: return_chat triggered, target=%p picture=%p",
-              lv_event_get_target(e), sg_chat.picture);
     lv_obj_add_flag(sg_chat.picture, LV_OBJ_FLAG_HIDDEN);
     lv_obj_clear_flag(sg_chat.content, LV_OBJ_FLAG_HIDDEN);
     lv_obj_clear_flag(sg_chat.plus_btn, LV_OBJ_FLAG_HIDDEN);
     sg_chat.cur_img_name[0] = '\0';
+}
+
+static void __image_auto_return_cb(lv_timer_t *timer)
+{
+    lv_timer_del(timer);
+    sg_image_auto_return_tm = NULL;
+    __do_return_chat_content();
+}
+
+static void __return_chat_content_event_cb(lv_event_t *e)
+{
+    PR_NOTICE("picture: return_chat triggered, target=%p picture=%p",
+              lv_event_get_target(e), sg_chat.picture);
+    if (sg_image_auto_return_tm != NULL) {
+        lv_timer_del(sg_image_auto_return_tm);
+        sg_image_auto_return_tm = NULL;
+    }
+    __do_return_chat_content();
 }
 
 /**
@@ -768,6 +785,12 @@ static void __ui_disp_image(AI_UI_IMG_T *img)
     lv_obj_add_flag(sg_chat.plus_btn, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(sg_chat.popup_menu, LV_OBJ_FLAG_HIDDEN);
 
+    if (sg_image_auto_return_tm != NULL) {
+        lv_timer_del(sg_image_auto_return_tm);
+        sg_image_auto_return_tm = NULL;
+    }
+    sg_image_auto_return_tm = lv_timer_create(__image_auto_return_cb, 3000, NULL);
+
     lv_vendor_disp_unlock();
 }
 
@@ -780,14 +803,9 @@ static void __ui_disp_image(AI_UI_IMG_T *img)
  * @param cb_arg Argument passed to the callback.
  * @param len    Length of cb_arg data.
  */
-static void __ui_disp_link(bool is_ai, char *text, AI_UI_CHAT_LINK_CB cb, void *cb_arg, uint32_t len)
+#if defined(ENABLE_IMAGE_ALBUM) && (ENABLE_IMAGE_ALBUM == 1)
+static void __create_link_label(bool is_ai, char *text, AI_UI_CHAT_LINK_CB cb, void *cb_arg, uint32_t len)
 {
-    if (sg_chat.content == NULL || text == NULL) {
-        return;
-    }
-
-    lv_vendor_disp_lock();
-
     __chat_check_msg_limit();
 
     lv_obj_t *label;
@@ -799,12 +817,6 @@ static void __ui_disp_link(bool is_ai, char *text, AI_UI_CHAT_LINK_CB cb, void *
 
     lv_obj_add_style(label, &sg_chat.style_link, LV_STATE_DEFAULT);
     lv_obj_add_flag(label, LV_OBJ_FLAG_CLICKABLE);
-    /* Link labels are usually a single line of small text — the default
-     * hit area equals the text bounding box, which is hard to tap on a
-     * touchscreen, especially when the label is nested inside scrollable
-     * containers (a small finger-drag gets swallowed as a scroll gesture
-     * before becoming a click). Extend the invisible hit area by ~12 px
-     * around the text so taps anywhere near the link still register. */
     lv_obj_set_ext_click_area(label, 12);
 
     if (cb) {
@@ -812,8 +824,6 @@ static void __ui_disp_link(bool is_ai, char *text, AI_UI_CHAT_LINK_CB cb, void *
         if (link_data) {
             link_data->cb  = cb;
             link_data->len = len;
-            /* Copy cb_arg so the link widget is not left with a dangling pointer
-             * after the UI task frees msg_data->data. */
             if (len > 0 && cb_arg != NULL) {
                 link_data->cb_arg = Malloc(len + 1);
                 if (link_data->cb_arg) {
@@ -830,8 +840,22 @@ static void __ui_disp_link(bool is_ai, char *text, AI_UI_CHAT_LINK_CB cb, void *
 
     lv_obj_update_layout(sg_chat.content);
     lv_obj_scroll_to_view_recursive(label, LV_ANIM_ON);
+}
+#endif
 
+static void __ui_disp_link(bool is_ai, char *text, AI_UI_CHAT_LINK_CB cb, void *cb_arg, uint32_t len)
+{
+    if (sg_chat.content == NULL || text == NULL) {
+        return;
+    }
+
+    lv_vendor_disp_lock();
+    __create_link_label(is_ai, text, cb, cb_arg, len);
     lv_vendor_disp_unlock();
+
+    if (cb) {
+        cb(cb_arg);
+    }
 }
 
 /**
