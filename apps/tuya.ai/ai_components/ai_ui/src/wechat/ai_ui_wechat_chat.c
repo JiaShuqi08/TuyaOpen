@@ -789,7 +789,7 @@ static void __ui_disp_image(AI_UI_IMG_T *img)
         lv_timer_del(sg_image_auto_return_tm);
         sg_image_auto_return_tm = NULL;
     }
-    sg_image_auto_return_tm = lv_timer_create(__image_auto_return_cb, 3000, NULL);
+    sg_image_auto_return_tm = lv_timer_create(__image_auto_return_cb, 10000, NULL);
 
     lv_vendor_disp_unlock();
 }
