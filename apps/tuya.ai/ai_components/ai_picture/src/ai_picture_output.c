@@ -88,7 +88,7 @@ static int __set_output_picture_size_cb(void *data)
     cJSON_Delete(custom_param);
 
     if(out) {
-        tuya_ai_agent_set_event_param(out);
+        tuya_ai_agent_set_session_param(out);
         PR_DEBUG("%s", out);
         cJSON_free(out);
     }else {
@@ -111,7 +111,7 @@ OPERATE_RET ai_picture_output_set_size(uint16_t width, uint16_t height)
     sg_picture_output.set_width  = width;
     sg_picture_output.set_height = height;
 
-    TUYA_CALL_ERR_LOG(tal_event_subscribe(EVENT_AI_SESSION_NEW,
+    TUYA_CALL_ERR_LOG(tal_event_subscribe(EVENT_AI_CLIENT_RUN,
                                           "set_output_picture_size",
                                           __set_output_picture_size_cb,
                                           SUBSCRIBE_TYPE_NORMAL));
@@ -276,12 +276,11 @@ static OPERATE_RET __ai_picture_dld_notify(FILE_DL_NOTIFY_TYPE_E type, void *inf
     return OPRT_OK;
 }
 
-OPERATE_RET ai_picture_output_dld_init(void)
+OPERATE_RET ai_picture_output_dld_init(uint16_t width, uint16_t height)
 {
     FILE_DL_CONFIG_CB_T cfg;
     memset(&cfg, 0, sizeof(FILE_DL_CONFIG_CB_T));
-    snprintf(cfg.resolution, sizeof(cfg.resolution), "%d*%d",
-             COMP_AI_PICTURE_DEF_OUTPIUT_WIDTH, COMP_AI_PICTURE_DEF_OUTPIUT_HEIGHT);
+    snprintf(cfg.resolution, sizeof(cfg.resolution), "%d*%d", width, height);
     strncpy(cfg.allow_formats[0], "jpg", sizeof(cfg.allow_formats[0]) - 1);
     cfg.max_per_file_size = COMP_AI_PICTURE_DLD_MAX_FILE_SIZE;
     cfg.max_file_cnt      = COMP_AI_PICTURE_DLD_MAX_FILE_CNT;
