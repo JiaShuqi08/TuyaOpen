@@ -1274,24 +1274,6 @@ OPERATE_RET tdl_button_read_status(TDL_BUTTON_HANDLE handle, uint8_t *status)
     return rt;
 }
 
-OPERATE_RET tdl_button_set_level(TDL_BUTTON_HANDLE handle, TUYA_GPIO_LEVEL_E level)
-{
-    OPERATE_RET rt = OPRT_OK;
-    TDL_BUTTON_LIST_NODE_T *p_node = NULL;
-    TDL_BUTTON_OPRT_INFO button_oprt;
-
-    TUYA_CHECK_NULL_RETURN(handle, OPRT_INVALID_PARM);
-
-    p_node = __tdl_button_find_node(handle);
-    TUYA_CHECK_NULL_RETURN(p_node, OPRT_COM_ERROR);
-
-    TUYA_CALL_ERR_RETURN(__tdl_get_operate_info(p_node, &button_oprt));
-
-    TUYA_CALL_ERR_RETURN(tdd_gpio_button_update_level(button_oprt.dev_handle, level));
-
-    return rt;
-}
-
 OPERATE_RET tdl_button_set_scan_time(uint8_t time_ms)
 {
     if (time_ms < TDL_BUTTON_SCAN_TIME)

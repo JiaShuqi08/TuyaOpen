@@ -926,7 +926,7 @@ static void __ui_add_chat_attch_img(AI_UI_IMG_T *img)
     /* Thumbnail canvas */
     lv_obj_t *canvas = lv_canvas_create(container);
     lv_canvas_set_buffer(canvas, thumb_buf,
-                         ATTACH_THUMB_SIZE, ATTACH_THUMB_SIZE, LV_IMG_CF_TRUE_COLOR);
+                         ATTACH_THUMB_SIZE, ATTACH_THUMB_SIZE, LV_COLOR_FORMAT_RGB565);
 
     /* Close button — top-right corner, solid red badge */
     lv_obj_t *close_btn = lv_obj_create(container);

@@ -18,6 +18,9 @@ file(GLOB_RECURSE IO_EXPANDER_SRCS "${COMMON_PATH}/io_expander/*.c")
 # add touch source files
 file(GLOB_RECURSE TOUCH_SRCS "${COMMON_PATH}/touch/*.c")
 
+# add button source files
+file(GLOB_RECURSE BUTTON_SRCS "${COMMON_PATH}/button/*.c")
+
 set(BOARD_SRC "")
 set(BOARD_INC "${COMMON_PATH}")
 
@@ -58,5 +61,15 @@ if (CONFIG_ENABLE_LED)
 
     list(APPEND BOARD_INC
         "${COMMON_PATH}/led"
+    )
+endif()
+
+if (CONFIG_ENABLE_BUTTON)
+    list(APPEND BOARD_SRC
+        "${BUTTON_SRCS}"
+    )
+
+    list(APPEND BOARD_INC
+        "${COMMON_PATH}/button"
     )
 endif()

@@ -32,6 +32,8 @@ int tca9554_set_dir(uint32_t pin_num_mask, int is_input);
 
 int tca9554_set_level(uint32_t pin_num_mask, int level);
 
+int tca9554_get_level(uint32_t pin_num_mask, uint32_t *level);
+
 #ifdef __cplusplus
 }
 #endif

@@ -82,8 +82,8 @@ int tca9554_init(void)
     esp_err_t esp_rt = ESP_OK;
 
     if (tca9554_config.io_expander) {
-        ESP_LOGE(TAG, "TCA9554 I2C expander already initialized");
-        return -1;
+        ESP_LOGI(TAG, "TCA9554 I2C expander already initialized");
+        return 0;
     }
 
     tca9554_config.i2c_bus = __i2c_init(I2C_NUM, I2C_SCL_IO, I2C_SDA_IO);
@@ -138,6 +138,26 @@ int tca9554_set_level(uint32_t pin_num_mask, int level)
     esp_rt = esp_io_expander_set_level(tca9554_config.io_expander, pin_num_mask, level);
 
     return esp_rt;
+}
+
+int tca9554_get_level(uint32_t pin_num_mask, uint32_t *level)
+{
+    if (NULL == tca9554_config.io_expander) {
+        ESP_LOGE(TAG, "TCA9554 I2C expander not initialized");
+        return -1;
+    }
+
+    if (NULL == level) {
+        return -1;
+    }
+
+    esp_err_t esp_rt = esp_io_expander_get_level(tca9554_config.io_expander, pin_num_mask, level);
+    if (esp_rt != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to get level: %s", esp_err_to_name(esp_rt));
+        return -1;
+    }
+
+    return 0;
 }
 
 #endif /* defined(BOARD_IO_EXPANDER_TYPE) && (BOARD_IO_EXPANDER_TYPE == IO_EXPANDER_TYPE_TCA9554) */

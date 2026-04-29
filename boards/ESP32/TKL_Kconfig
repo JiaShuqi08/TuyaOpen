@@ -52,6 +52,10 @@ config ENABLE_VIDEO
     bool
     default n
 
+config ENABLE_EXT_RAM
+    bool
+    default n
+
 config ENABLE_ESP_DISPLAY
     bool
     default n
