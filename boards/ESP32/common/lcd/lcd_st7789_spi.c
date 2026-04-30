@@ -27,6 +27,22 @@
 ***********************************************************/
 #define TAG "LCD_ST7789_SPI"
 
+#ifndef LCD_RST_PIN
+#define LCD_RST_PIN GPIO_NUM_NC
+#endif
+
+#ifndef DISPLAY_COLOR_INVERT
+#define DISPLAY_COLOR_INVERT false
+#endif
+
+#ifndef DISPLAY_OFFSET_X
+#define DISPLAY_OFFSET_X (0)
+#endif
+
+#ifndef DISPLAY_OFFSET_Y
+#define DISPLAY_OFFSET_Y (0)
+#endif
+
 /***********************************************************
 ***********************typedef define***********************
 ***********************************************************/
@@ -88,18 +104,20 @@ int lcd_st7789_spi_init(void)
 
     ESP_LOGD(TAG, "Install LCD driver");
     esp_lcd_panel_dev_config_t panel_config = {};
-    panel_config.reset_gpio_num = GPIO_NUM_NC;
+    panel_config.reset_gpio_num = LCD_RST_PIN;
     panel_config.rgb_ele_order = LCD_RGB_ELEMENT_ORDER_RGB;
     panel_config.bits_per_pixel = 16;
-    panel_config.data_endian = LCD_RGB_DATA_ENDIAN_BIG,
+    panel_config.data_endian = LCD_RGB_DATA_ENDIAN_BIG;
     esp_lcd_new_panel_st7789(lcd_config.panel_io, &panel_config, &lcd_config.panel);
 
     esp_lcd_panel_reset(lcd_config.panel);
 
     esp_lcd_panel_init(lcd_config.panel);
-    esp_lcd_panel_invert_color(lcd_config.panel, DISPLAY_BACKLIGHT_OUTPUT_INVERT);
+    esp_lcd_panel_invert_color(lcd_config.panel, DISPLAY_COLOR_INVERT);
+    esp_lcd_panel_set_gap(lcd_config.panel, DISPLAY_OFFSET_X, DISPLAY_OFFSET_Y);
     esp_lcd_panel_swap_xy(lcd_config.panel, DISPLAY_SWAP_XY);
     esp_lcd_panel_mirror(lcd_config.panel, DISPLAY_MIRROR_X, DISPLAY_MIRROR_Y);
+    esp_lcd_panel_disp_on_off(lcd_config.panel, true);
 
     return 0;
 }
