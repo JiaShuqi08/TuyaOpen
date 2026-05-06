@@ -170,6 +170,12 @@ if(TOS_FRAMEWORK STREQUAL "arduino")
 endif()
 message(STATUS "[TOP] PLATFORM_NEED_LIBS: ${PLATFORM_NEED_LIBS}")
 include(${TOS_PROJECT_ROOT}/CMakeLists.txt)
+# ESP-IDF builds LVGL from managed_components with LV_CONF_PATH on the IDF side only.
+# Mirror that for the example static library so lv_conf.h (fonts, etc.) matches lvgl__lvgl.
+if(PLATFORM_NAME STREQUAL "ESP32" AND EXISTS "${TOP_SOURCE_DIR}/src/liblvgl/v9/conf/lv_conf.h")
+    target_compile_definitions(${EXAMPLE_LIB} PRIVATE
+        "LV_CONF_PATH=${TOP_SOURCE_DIR}/src/liblvgl/v9/conf/lv_conf.h")
+endif()
 target_include_directories(${EXAMPLE_LIB}
     PUBLIC
     ${HEADER_DIR}
@@ -185,6 +191,8 @@ OPEN_ROOT:::\"${TOP_SOURCE_DIR}\"***
 OPEN_HEADER_DIR:::\"${PLATFORM_NEED_HDIR}\"***
 OPEN_LIBS_DIR:::\"${CMAKE_ARCHIVE_OUTPUT_DIRECTORY}\"***
 PLATFORM_NEED_LIBS:::\"${PLATFORM_NEED_LIBS}\"***
+PLATFORM_IDF_REQUIRES:::\"${PLATFORM_IDF_REQUIRES}\"***
+PLATFORM_IDF_SDKCONFIG:::\"${PLATFORM_IDF_SDKCONFIG}\"***
 BIN_OUTPUT_DIR:::\"${EXECUTABLE_OUTPUT_PATH}\"***
 PLATFORM_CHIP:::\"${PLATFORM_CHIP}\"***
 PLATFORM_BOARD:::\"${PLATFORM_BOARD}\"***

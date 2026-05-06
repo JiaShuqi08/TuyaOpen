@@ -108,6 +108,12 @@ choice
             rsource "./M5STACK_STICKS3/Kconfig"
         endif
 
+    config BOARD_CHOICE_XTEINK_X4
+        bool "XTEINK_X4 (ESP32-C3 e-paper reader)"
+        if (BOARD_CHOICE_XTEINK_X4)
+            rsource "./XTEINK_X4/Kconfig"
+        endif
+
         
     config BOARD_CHOICE_WAVESHARE_ESP32C6_DEV_KIT_N16
         bool "WAVESHARE_ESP32C6_DEV_KIT_N16"

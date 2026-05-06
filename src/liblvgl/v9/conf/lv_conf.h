@@ -461,7 +461,7 @@
 #endif
 
 #ifndef LV_FONT_MONTSERRAT_36
-#define LV_FONT_MONTSERRAT_36 0
+#define LV_FONT_MONTSERRAT_36 1
 #endif
 
 #ifndef LV_FONT_MONTSERRAT_38
@@ -485,7 +485,7 @@
 #endif
 
 #ifndef LV_FONT_MONTSERRAT_48
-#define LV_FONT_MONTSERRAT_48 0
+#define LV_FONT_MONTSERRAT_48 1
 #endif
 
 
@@ -516,8 +516,8 @@
  *E.g. #define LV_FONT_CUSTOM_DECLARE   LV_FONT_DECLARE(my_font_1) LV_FONT_DECLARE(my_font_2)*/
 #define LV_FONT_CUSTOM_DECLARE
 
-/*Always set a default font*/
-#define LV_FONT_DEFAULT &lv_font_montserrat_14
+/*Always set a default font (EPD / demos: 24 reads better than 14 at arm's length)*/
+#define LV_FONT_DEFAULT &lv_font_montserrat_24
 
 /*Enable handling large font and/or fonts with a lot of characters.
  *The limit depends on the font size, font face and bpp.
