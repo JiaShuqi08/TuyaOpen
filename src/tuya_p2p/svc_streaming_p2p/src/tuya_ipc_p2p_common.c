@@ -136,13 +136,13 @@ OPERATE_RET tuya_ipc_p2p_update_pw(INOUT CHAR_T p2p_pw[])
 OPERATE_RET tuya_ipc_p2p_get_pw(INOUT CHAR_T p2p_pw[])
 {
     BYTE_T *old_pwd = NULL;
-    UINT_T old_pwd_len = 0;
+    size_t old_pwd_len = 0;
     cJSON *result = NULL;
     BYTE_T new_pwd[P2P_PASSWD_LEN + 1] = {0};
     INT_T rtyCnt = 0;
 
-    OPERATE_RET ret = tal_kv_get("p2p_pwd", &(old_pwd), (size_t *)&old_pwd_len);
-    if ((OPRT_OK != ret) || (0 == old_pwd[0])) {
+    OPERATE_RET ret = tal_kv_get("p2p_pwd", &(old_pwd), &old_pwd_len);
+    if ((OPRT_OK != ret) || (NULL == old_pwd) || (0 == old_pwd[0])) {
         if (sg_p2p_passwd_update_flag == FALSE) {
             sg_p2p_passwd_update_flag = TRUE;
 
@@ -175,8 +175,8 @@ OPERATE_RET tuya_ipc_p2p_get_pw(INOUT CHAR_T p2p_pw[])
             PR_DEBUG("p2p passwd wait for passwd update\n");
             INT_T wait_times = P2P_AUTH_INFO_UPDATE_RETRY_CNT;
             do {
-                OPERATE_RET ret = tal_kv_get("p2p_pwd", &(old_pwd), (size_t *)&old_pwd_len);
-                if (ret == OPRT_OK) {
+                OPERATE_RET ret = tal_kv_get("p2p_pwd", &(old_pwd), &old_pwd_len);
+                if ((OPRT_OK == ret) && (NULL != old_pwd)) {
                     // PR_DEBUG("get p2p passwd = %s",old_pwd);
                     snprintf(p2p_pw, P2P_PASSWD_LEN + 1, "%s", (CHAR_T *)old_pwd);
                     tal_kv_free(old_pwd);
@@ -237,10 +237,10 @@ OPERATE_RET tuya_ipc_p2p_get_id(INOUT CHAR_T p2p_id[])
         return OPRT_INVALID_PARM;
     }
     BYTE_T *p_auth_str = NULL;
-    UINT_T auth_param_len = 0;
+    size_t auth_param_len = 0;
 
-    OPERATE_RET ret = tal_kv_get("p2p_auth_info", &p_auth_str, (size_t *)&auth_param_len);
-    if ((ret != OPRT_OK) || (0 == p_auth_str[0])) {
+    OPERATE_RET ret = tal_kv_get("p2p_auth_info", &p_auth_str, &auth_param_len);
+    if ((ret != OPRT_OK) || (NULL == p_auth_str) || (0 == p_auth_str[0])) {
         PR_ERR("read p2p_auth_info fails ..%d", ret);
         return OPRT_COM_ERROR;
     }
