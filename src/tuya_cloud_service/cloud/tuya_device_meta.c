@@ -54,11 +54,13 @@ static void __device_meta_event_workq(void *data)
 
     OPERATE_RET rt = OPRT_OK;
 
+#if defined(ENABLE_DEVICE_TIMER) && (ENABLE_DEVICE_TIMER == 1)
     rt = tuya_device_meta_add_number("timerCapability", 1);
     if (OPRT_OK != rt) {
         PR_ERR("add timerCapability failed:%d", rt);
         return;
     }
+#endif
 
     rt = tuya_device_meta_report();
     if (OPRT_OK != rt) {
@@ -263,7 +265,12 @@ OPERATE_RET tuya_device_meta_report(void)
     atop_base_response_t response = {0};
     bool response_used = false;
 
-    if (s_meta.mutex == NULL || s_meta.json == NULL) {
+    if (s_meta.json == NULL) {
+        /* no meta to report */
+        return OPRT_OK;
+    }
+
+    if (s_meta.mutex == NULL) {
         return OPRT_INVALID_PARM;
     }
 

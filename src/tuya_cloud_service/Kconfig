@@ -60,5 +60,9 @@ menu "configure tuya cloud service"
                     default 5120
                 endif
         endif
+
+    config ENABLE_DEVICE_TIMER
+        bool "enable device timer(CloudTiming)"
+        default y
 endmenu
     
