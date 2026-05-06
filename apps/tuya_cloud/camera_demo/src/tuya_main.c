@@ -134,8 +134,7 @@ void user_event_handler_on(tuya_iot_client_t *client, tuya_event_msg_t *event)
     case TUYA_EVENT_RTC_REQ: {
         cJSON *root_json = event->value.asJSON;
         gw_p2p_mqtt_data_cb(root_json);
-        break;
-    }
+    } break;
 
     /* RECV upgrade request */
     case TUYA_EVENT_UPGRADE_NOTIFY:
