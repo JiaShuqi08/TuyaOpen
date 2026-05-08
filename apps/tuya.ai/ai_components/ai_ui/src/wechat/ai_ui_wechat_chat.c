@@ -625,11 +625,13 @@ static void __ui_disp_image(AI_UI_IMG_T *img)
     }
 
     uint32_t rgb565_size = info.width * info.height * 2;
+    PR_NOTICE("wechat chat: rgb565 width=%u, height=%u, size=%u", info.width, info.height, rgb565_size);
     uint8_t *rgb565_buf = Malloc(rgb565_size);
     if (rgb565_buf == NULL) {
         PR_ERR("wechat chat: malloc rgb565 buf failed, size=%u", rgb565_size);
         return;
     }
+    memset(rgb565_buf, 0, rgb565_size);
 
     TAL_IMAGE_JPEG_OUTPUT_T out = {0};
     out.out_buf      = rgb565_buf;
@@ -652,6 +654,8 @@ static void __ui_disp_image(AI_UI_IMG_T *img)
 
     lv_canvas_set_buffer(sg_chat.picture_canvas, rgb565_buf,
                          info.width, info.height, LV_COLOR_FORMAT_RGB565);
+    lv_obj_set_size(sg_chat.picture_canvas, info.width, info.height);
+    lv_obj_center(sg_chat.picture_canvas);
 
     /* Create action bar lazily AFTER the canvas so it is always on top (higher z-order). */
     if (NULL == sg_chat.picture_action_bar) {
@@ -803,7 +807,6 @@ static void __ui_disp_image(AI_UI_IMG_T *img)
  * @param cb_arg Argument passed to the callback.
  * @param len    Length of cb_arg data.
  */
-#if defined(ENABLE_IMAGE_ALBUM) && (ENABLE_IMAGE_ALBUM == 1)
 static void __create_link_label(bool is_ai, char *text, AI_UI_CHAT_LINK_CB cb, void *cb_arg, uint32_t len)
 {
     __chat_check_msg_limit();
@@ -841,7 +844,6 @@ static void __create_link_label(bool is_ai, char *text, AI_UI_CHAT_LINK_CB cb, v
     lv_obj_update_layout(sg_chat.content);
     lv_obj_scroll_to_view_recursive(label, LV_ANIM_ON);
 }
-#endif
 
 static void __ui_disp_link(bool is_ai, char *text, AI_UI_CHAT_LINK_CB cb, void *cb_arg, uint32_t len)
 {

@@ -232,21 +232,30 @@ static OPERATE_RET __ai_picture_dld_notify(FILE_DL_NOTIFY_TYPE_E type, void *inf
 
     case FILE_DL_TYPE_TRANS_END: {
         FILE_DL_TRANS_END_INFO_T *te = (FILE_DL_TRANS_END_INFO_T *)info;
+        char saved_name[AI_PICTURE_NAME_MAX_LEN + 1] = {0};
+        OPERATE_RET save_rt = OPRT_COM_ERROR;
+
         if (te && te->ret == 0 && sg_dld_file.buf && sg_dld_file.received_len > 0) {
-            char saved_name[AI_PICTURE_NAME_MAX_LEN + 1] = {0};
-            OPERATE_RET rt = ai_picture_save_to_album(sg_dld_file.buf, sg_dld_file.received_len,
-                                                      sg_dld_file.cloud_name[0] ? sg_dld_file.cloud_name : NULL,
-                                                      saved_name);
-            if (rt != OPRT_OK) {
-                PR_ERR("dld save to album failed, rt:%d", rt);
-            } else {
-                ai_user_event_notify(AI_USER_EVT_GET_PICTURE_FROM_APP, saved_name);
+            save_rt = ai_picture_save_to_album(sg_dld_file.buf, sg_dld_file.received_len,
+                                              sg_dld_file.cloud_name[0] ? sg_dld_file.cloud_name : NULL,
+                                              saved_name);
+            if (save_rt != OPRT_OK) {
+                PR_ERR("dld save to album failed, rt:%d", save_rt);
             }
         }
+
+        /* Free the large download buffer BEFORE notifying the UI thread.
+         * This ensures the heap is settled (no concurrent large Free racing
+         * with the UI thread's Malloc for the RGB565 decode buffer) when the
+         * UI thread begins processing the event. */
         if (sg_dld_file.buf) {
             Free(sg_dld_file.buf);
         }
         memset(&sg_dld_file, 0, sizeof(AI_PICTURE_DLD_FILE_T));
+
+        if (save_rt == OPRT_OK) {
+            ai_user_event_notify(AI_USER_EVT_GET_PICTURE_FROM_APP, saved_name);
+        }
         break;
     }
 
