@@ -210,7 +210,7 @@ OPERATE_RET tuya_ai_output_init(AI_OUTPUT_CBS_T *cbs)
     thrd_param.priority = THREAD_PRIO_1;
     thrd_param.thrdname = "ai_agent_output";
     thrd_param.stackDepth = AI_OUTPUT_STACK_SIZE;
-#if defined(ENABLE_EXT_RAM) && (ENABLE_EXT_RAM == 1)
+#if defined(AI_STACK_IN_PSRAM) && (AI_STACK_IN_PSRAM == 1)
     thrd_param.psram_mode = 1;
 #endif
     PR_DEBUG("ai output: free internal heap before thread create: %d", tal_system_get_free_heap_size());

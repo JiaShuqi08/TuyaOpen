@@ -204,14 +204,14 @@ OPERATE_RET tal_thread_create_and_start(THREAD_HANDLE *handle, const THREAD_ENTE
     int opRet;
 #if defined(ENABLE_EXT_RAM) && (ENABLE_EXT_RAM == 1)
     if (cfg->psram_mode == 1) {
-        PR_DEBUG("thread_create %s: psram_mode=1, using PSRAM stack", cfg->thrdname);
+        PR_INFO("thread_create %s: psram_mode=1, using PSRAM stack", cfg->thrdname);
         opRet = tkl_thread_create_in_psram(&(pMgr->thrdID), cfg->thrdname, cfg->stackDepth, cfg->priority,
                                            __WrapRunFunc, pMgr);
     } else {
         opRet = tkl_thread_create(&(pMgr->thrdID), cfg->thrdname, cfg->stackDepth, cfg->priority, __WrapRunFunc, pMgr);
     }
 #else
-    PR_DEBUG("thread_create %s: ENABLE_EXT_RAM not set", cfg->thrdname);
+    PR_INFO("thread_create %s: ENABLE_EXT_RAM not set", cfg->thrdname);
     opRet = tkl_thread_create(&(pMgr->thrdID), cfg->thrdname, cfg->stackDepth, cfg->priority, __WrapRunFunc, pMgr);
 #endif
     if (opRet != 0) {
