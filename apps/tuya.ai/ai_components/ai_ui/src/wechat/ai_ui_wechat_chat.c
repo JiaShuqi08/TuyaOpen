@@ -48,6 +48,7 @@ LV_IMG_DECLARE(icon_printer_app);
 #define POPUP_ITEM_H              36
 #define POPUP_ICON_SIZE           24
 
+
 /***********************************************************
 ***********************typedef define***********************
 ***********************************************************/
@@ -105,6 +106,7 @@ static lv_timer_t *sg_image_auto_return_tm = NULL;
 /***********************************************************
 ***********************function define**********************
 ***********************************************************/
+
 
 /**
  * @brief Delete the oldest message when message count exceeds limit.
@@ -662,7 +664,7 @@ static void __ui_disp_image(AI_UI_IMG_T *img)
         PR_NOTICE("picture: creating action bar (first show)");
         sg_chat.picture_action_bar = lv_obj_create(sg_chat.picture);
         lv_obj_set_size(sg_chat.picture_action_bar, 44, 84);
-        lv_obj_align(sg_chat.picture_action_bar, LV_ALIGN_RIGHT_MID, -8, 0);
+        lv_obj_align(sg_chat.picture_action_bar, LV_ALIGN_RIGHT_MID, -8 - WECHAT_SAFE_INSET, 0);
         lv_obj_set_style_bg_color(sg_chat.picture_action_bar, lv_color_black(), 0);
         lv_obj_set_style_bg_opa(sg_chat.picture_action_bar, 140, 0);
         lv_obj_set_style_radius(sg_chat.picture_action_bar, 18, 0);
@@ -1021,6 +1023,20 @@ static void __ui_clear_chat_attach(void)
  */
 void ai_ui_wechat_chat_init(lv_obj_t *parent)
 {
+    lv_coord_t content_w = LV_HOR_RES - (WECHAT_SAFE_INSET * 2);
+    lv_coord_t attach_w = LV_HOR_RES - (WECHAT_SAFE_INSET * 2);
+    lv_coord_t content_h = LV_VER_RES - 40 - WECHAT_SAFE_INSET;
+
+    if (content_w < 1) {
+        content_w = LV_HOR_RES;
+    }
+    if (attach_w < 1) {
+        attach_w = LV_HOR_RES;
+    }
+    if (content_h < 1) {
+        content_h = LV_VER_RES - 40;
+    }
+
     /* Style init — already inside disp lock, safe to call LVGL style APIs */
     lv_style_init(&sg_chat.style_avatar);
     lv_style_set_radius(&sg_chat.style_avatar, LV_RADIUS_CIRCLE);
@@ -1049,15 +1065,16 @@ void ai_ui_wechat_chat_init(lv_obj_t *parent)
 
     /* Chat content area */
     sg_chat.content = lv_obj_create(parent);
-    lv_obj_set_size(sg_chat.content, LV_HOR_RES, LV_VER_RES - 40);
+    lv_obj_set_size(sg_chat.content, content_w, content_h);
     lv_obj_set_flex_flow(sg_chat.content, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_style_pad_ver(sg_chat.content, 8, 0);
     lv_obj_set_style_pad_hor(sg_chat.content, 10, 0);
-    lv_obj_align(sg_chat.content, LV_ALIGN_BOTTOM_MID, 0, 0);
+    lv_obj_align(sg_chat.content, LV_ALIGN_BOTTOM_MID, 0, -WECHAT_SAFE_INSET);
 
     lv_obj_set_scroll_dir(sg_chat.content, LV_DIR_VER);
     lv_obj_set_scrollbar_mode(sg_chat.content, LV_SCROLLBAR_MODE_OFF);
     lv_obj_set_style_bg_opa(sg_chat.content, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(sg_chat.content, 0, 0);
     lv_obj_add_flag(sg_chat.content, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_event_cb(sg_chat.content, __content_click_cb, LV_EVENT_CLICKED, NULL);
 
@@ -1073,8 +1090,8 @@ void ai_ui_wechat_chat_init(lv_obj_t *parent)
 
     /* Attach bar — horizontal row of thumbnails at bottom, hidden by default */
     sg_chat.attach_bar = lv_obj_create(parent);
-    lv_obj_set_size(sg_chat.attach_bar, LV_HOR_RES, ATTACH_BAR_HEIGHT);
-    lv_obj_align(sg_chat.attach_bar, LV_ALIGN_BOTTOM_MID, 0, 0);
+    lv_obj_set_size(sg_chat.attach_bar, attach_w, ATTACH_BAR_HEIGHT);
+    lv_obj_align(sg_chat.attach_bar, LV_ALIGN_BOTTOM_MID, 0, -WECHAT_SAFE_INSET);
     lv_obj_set_style_bg_color(sg_chat.attach_bar, lv_color_hex(0xF5F5F5), 0);
     lv_obj_set_style_bg_opa(sg_chat.attach_bar, LV_OPA_COVER, 0);
     lv_obj_set_style_border_color(sg_chat.attach_bar, lv_color_hex(0xDDDDDD), 0);
@@ -1092,7 +1109,7 @@ void ai_ui_wechat_chat_init(lv_obj_t *parent)
     /* "+" button — bottom-right, offset inward so it's not flush with the corner */
     sg_chat.plus_btn = lv_obj_create(parent);
     lv_obj_set_size(sg_chat.plus_btn, PLUS_BTN_SIZE, PLUS_BTN_SIZE);
-    lv_obj_align(sg_chat.plus_btn, LV_ALIGN_BOTTOM_RIGHT, -24, -20);
+    lv_obj_align(sg_chat.plus_btn, LV_ALIGN_BOTTOM_RIGHT, -24 - WECHAT_SAFE_INSET, -20 - WECHAT_SAFE_INSET);
     lv_obj_set_style_bg_color(sg_chat.plus_btn, lv_color_white(), 0);
     lv_obj_set_style_bg_opa(sg_chat.plus_btn, LV_OPA_COVER, 0);
     lv_obj_set_style_radius(sg_chat.plus_btn, LV_RADIUS_CIRCLE, 0);
