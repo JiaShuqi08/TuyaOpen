@@ -311,7 +311,9 @@ static void __picture_attach_btn_cb(lv_event_t *e)
     /* Return to chat so the attach bar update is visible */
     lv_obj_add_flag(sg_chat.picture, LV_OBJ_FLAG_HIDDEN);
     lv_obj_clear_flag(sg_chat.content, LV_OBJ_FLAG_HIDDEN);
+#if defined(ENABLE_LVGL_TP) && (ENABLE_LVGL_TP == 1)
     lv_obj_clear_flag(sg_chat.plus_btn, LV_OBJ_FLAG_HIDDEN);
+#endif
     sg_chat.cur_img_name[0] = '\0';
 }
 #endif
@@ -323,7 +325,9 @@ static void __do_return_chat_content(void)
 {
     lv_obj_add_flag(sg_chat.picture, LV_OBJ_FLAG_HIDDEN);
     lv_obj_clear_flag(sg_chat.content, LV_OBJ_FLAG_HIDDEN);
+#if defined(ENABLE_LVGL_TP) && (ENABLE_LVGL_TP == 1)
     lv_obj_clear_flag(sg_chat.plus_btn, LV_OBJ_FLAG_HIDDEN);
+#endif
     sg_chat.cur_img_name[0] = '\0';
 }
 
@@ -375,9 +379,11 @@ static void __link_delete_event_cb(lv_event_t *e)
 
 static void __popup_dismiss(void)
 {
+#if defined(ENABLE_LVGL_TP) && (ENABLE_LVGL_TP == 1)
     if (!lv_obj_has_flag(sg_chat.popup_menu, LV_OBJ_FLAG_HIDDEN)) {
         lv_obj_add_flag(sg_chat.popup_menu, LV_OBJ_FLAG_HIDDEN);
     }
+#endif
 }
 
 #if defined(ENABLE_COMP_AI_VIDEO) && (ENABLE_COMP_AI_VIDEO == 1)
@@ -415,6 +421,7 @@ static void __content_click_cb(lv_event_t *e)
     __popup_dismiss();
 }
 
+#if defined(ENABLE_LVGL_TP) && (ENABLE_LVGL_TP == 1)
 static void __plus_btn_click_cb(lv_event_t *e)
 {
     (void)e;
@@ -429,6 +436,7 @@ static void __plus_btn_click_cb(lv_event_t *e)
         PR_DEBUG("plus_click: popup hidden");
     }
 }
+#endif /* ENABLE_LVGL_TP */
 
 /* ── chat page callbacks (registered into AI_UI_INTFS_T) ── */
 
@@ -440,8 +448,10 @@ static void __ui_open_chat(void)
     lv_vendor_disp_lock();
     lv_obj_clear_flag(sg_chat.content, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(sg_chat.picture, LV_OBJ_FLAG_HIDDEN);
+#if defined(ENABLE_LVGL_TP) && (ENABLE_LVGL_TP == 1)
     lv_obj_clear_flag(sg_chat.plus_btn, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(sg_chat.popup_menu, LV_OBJ_FLAG_HIDDEN);
+#endif
     lv_vendor_disp_unlock();
 }
 
@@ -452,8 +462,10 @@ static void __ui_close_chat(void)
 {
     lv_vendor_disp_lock();
     lv_obj_add_flag(sg_chat.content, LV_OBJ_FLAG_HIDDEN);
+#if defined(ENABLE_LVGL_TP) && (ENABLE_LVGL_TP == 1)
     lv_obj_add_flag(sg_chat.plus_btn, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(sg_chat.popup_menu, LV_OBJ_FLAG_HIDDEN);
+#endif
     lv_vendor_disp_unlock();
 }
 
@@ -788,8 +800,10 @@ static void __ui_disp_image(AI_UI_IMG_T *img)
 
     lv_obj_add_flag(sg_chat.content, LV_OBJ_FLAG_HIDDEN);
     lv_obj_clear_flag(sg_chat.picture, LV_OBJ_FLAG_HIDDEN);
+#if defined(ENABLE_LVGL_TP) && (ENABLE_LVGL_TP == 1)
     lv_obj_add_flag(sg_chat.plus_btn, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(sg_chat.popup_menu, LV_OBJ_FLAG_HIDDEN);
+#endif
 
     if (sg_image_auto_return_tm != NULL) {
         lv_timer_del(sg_image_auto_return_tm);
@@ -1106,6 +1120,7 @@ void ai_ui_wechat_chat_init(lv_obj_t *parent)
     lv_obj_clear_flag(sg_chat.attach_bar, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_flag(sg_chat.attach_bar, LV_OBJ_FLAG_HIDDEN);
 
+#if defined(ENABLE_LVGL_TP) && (ENABLE_LVGL_TP == 1)
     /* "+" button — bottom-right, offset inward so it's not flush with the corner */
     sg_chat.plus_btn = lv_obj_create(parent);
     lv_obj_set_size(sg_chat.plus_btn, PLUS_BTN_SIZE, PLUS_BTN_SIZE);
@@ -1239,6 +1254,7 @@ void ai_ui_wechat_chat_init(lv_obj_t *parent)
     lv_label_set_text(add_img_label, ADD_IMAGE);
     lv_obj_add_event_cb(add_img_btn, __popup_add_img_cb, LV_EVENT_CLICKED, NULL);
 #endif /* ENABLE_IMAGE_ALBUM */
+#endif /* ENABLE_LVGL_TP */
 }
 
 /**
