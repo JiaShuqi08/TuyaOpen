@@ -42,6 +42,7 @@
 #include "axp2101_driver.h"
 #include "tal_system.h"
 #include "tal_kv.h"
+#include "tal_time_service.h"
 #include "netmgr.h"
 #endif
 /***********************************************************
@@ -148,7 +149,7 @@ static lv_obj_t *horizontal_line;
 
 // Menu system
 static lv_obj_t *menu_buttons[MENU_BUTTON_COUNT];
-static uint8_t current_selected_button = 0;
+static uint8_t   current_selected_button = 0;
 
 // Status bar components
 static lv_obj_t *wifi_icon;
@@ -156,46 +157,54 @@ static lv_obj_t *wifi_icon;
 static lv_obj_t *cellular_icon;
 static lv_obj_t *battery_icon;
 static lv_obj_t *battery_label; // Battery info label
+static lv_obj_t *clock_label;   // Clock display label
 
 // Status tracking
-static uint8_t current_wifi_strength = 0;
-static uint8_t current_cellular_strength = 2;
+static uint8_t current_wifi_strength      = 0;
+static uint8_t current_cellular_strength  = 2;
 static uint8_t current_cellular_connected = true;
-static uint8_t current_battery_level = 4;
-static bool current_battery_charging = false;
+static uint8_t current_battery_level      = 4;
+static bool    current_battery_charging   = false;
+
+// Clock variables
+static uint8_t current_hour    = 12;
+static uint8_t current_minute  = 0;
+static bool    clock_edit_mode = false;
+static bool    clock_edit_hour = true; // true = editing hour, false = editing minute
+static TIME_T  last_sync_time  = 0;    // Last sync time for system time update
 
 // Pet area variables - Pre-loaded GIF approach (like pet_area.c)
 static lv_obj_t *gif_container = NULL; // Container for GIF widgets
 
 // Normal state animation objects (for walking behavior)
-static lv_obj_t *pet_image_walk = NULL;
-static lv_obj_t *pet_image_walk_left = NULL;
-static lv_obj_t *pet_image_blink = NULL;
-static lv_obj_t *pet_image_stand = NULL;
+static lv_obj_t *pet_image_walk       = NULL;
+static lv_obj_t *pet_image_walk_left  = NULL;
+static lv_obj_t *pet_image_blink      = NULL;
+static lv_obj_t *pet_image_stand      = NULL;
 static lv_obj_t *current_normal_image = NULL; // Points to the currently active normal state image
 
 // Special state animation objects (pre-loaded to prevent black screen)
-static lv_obj_t *pet_image_sleep = NULL;
-static lv_obj_t *pet_image_dance = NULL;
-static lv_obj_t *pet_image_eat = NULL;
-static lv_obj_t *pet_image_bath = NULL;
-static lv_obj_t *pet_image_toilet = NULL;
-static lv_obj_t *pet_image_sick = NULL;
-static lv_obj_t *pet_image_happy = NULL;
-static lv_obj_t *pet_image_angry = NULL;
-static lv_obj_t *pet_image_cry = NULL;
+static lv_obj_t *pet_image_sleep       = NULL;
+static lv_obj_t *pet_image_dance       = NULL;
+static lv_obj_t *pet_image_eat         = NULL;
+static lv_obj_t *pet_image_bath        = NULL;
+static lv_obj_t *pet_image_toilet      = NULL;
+static lv_obj_t *pet_image_sick        = NULL;
+static lv_obj_t *pet_image_happy       = NULL;
+static lv_obj_t *pet_image_angry       = NULL;
+static lv_obj_t *pet_image_cry         = NULL;
 static lv_obj_t *current_special_image = NULL; // Points to the currently active special state image
 
 // Pet animation state
 static ai_pet_state_t current_animation_state = AI_PET_STATE_NORMAL;
-static lv_timer_t *pet_animation_timer = NULL;
-static lv_timer_t *pet_movement_timer = NULL;
-static int16_t pet_x_pos = 0;
-static int8_t pet_direction = 1;
-static uint32_t pet_state_timer = 0;
-static uint32_t pet_state_duration = 0;
-static bool pet_is_walking = false;
-static uint8_t idle_animation_state = 1;
+static lv_timer_t    *pet_animation_timer     = NULL;
+static lv_timer_t    *pet_movement_timer      = NULL;
+static int16_t        pet_x_pos               = 0;
+static int8_t         pet_direction           = 1;
+static uint32_t       pet_state_timer         = 0;
+static uint32_t       pet_state_duration      = 0;
+static bool           pet_is_walking          = false;
+static uint8_t        idle_animation_state    = 1;
 
 // UI update timer (unified update for all UI elements)
 static lv_timer_t *ui_update_timer = NULL;
@@ -204,12 +213,12 @@ static lv_timer_t *ui_update_timer = NULL;
 static int16_t last_pet_x_pos = 0;
 
 // Idle animation timing
-static uint32_t idle_animation_timer = 0;
+static uint32_t idle_animation_timer    = 0;
 static uint32_t idle_animation_duration = 0;
 
 // Pet event callback system
-static pet_event_callback_t pet_event_callback = NULL;
-static void *pet_event_user_data = NULL;
+static pet_event_callback_t pet_event_callback  = NULL;
+static void                *pet_event_user_data = NULL;
 
 // Pet stats
 static pet_stats_t main_screen_pet_stats;
@@ -218,10 +227,10 @@ static pet_stats_t main_screen_pet_stats;
 static uint16_t standby_time = 0;
 
 Screen_t main_screen = {
-    .init = main_screen_init,
-    .deinit = main_screen_deinit,
+    .init       = main_screen_init,
+    .deinit     = main_screen_deinit,
     .screen_obj = &ui_main_screen,
-    .name = "Main",
+    .name       = "Main",
 };
 
 /***********************************************************
@@ -232,18 +241,18 @@ static void keyboard_event_cb(lv_event_t *e);
 static void create_main_ui_components(void);
 
 // Menu system functions
-static void update_menu_button_selection(uint8_t old_selection, uint8_t new_selection);
-static void handle_menu_navigation(uint32_t key);
-static void handle_menu_selection(void);
+static void      update_menu_button_selection(uint8_t old_selection, uint8_t new_selection);
+static void      handle_menu_navigation(uint32_t key);
+static void      handle_menu_selection(void);
 static lv_obj_t *create_bottom_menu(lv_obj_t *parent);
-static void handle_main_navigation(uint32_t key);
-static uint8_t get_selected_button(void);
+static void      handle_main_navigation(uint32_t key);
+static uint8_t   get_selected_button(void);
 
 // UI component creation functions
 static lv_obj_t *simple_status_bar_create(lv_obj_t *parent);
 static lv_obj_t *simple_pet_area_create(lv_obj_t *parent);
-static void simple_pet_area_start_animation(void);
-static void simple_pet_area_stop_animation(void);
+static void      simple_pet_area_start_animation(void);
+static void      simple_pet_area_stop_animation(void);
 
 // Status bar icon helper functions (inline for performance)
 static inline const lv_img_dsc_t *get_wifi_icon_by_strength(uint8_t strength);
@@ -253,7 +262,7 @@ static inline const lv_img_dsc_t *get_battery_icon_by_level(uint8_t level, bool 
 // Pet animation functions
 static const lv_img_dsc_t *get_gif_src_by_state(ai_pet_state_t state, bool is_walking, int8_t direction,
                                                 uint8_t idle_state);
-static void switch_pet_animation(lv_obj_t *target_image);
+static void                switch_pet_animation(lv_obj_t *target_image);
 // static void switch_to_special_animation(lv_obj_t* target_special_image);
 // static void switch_to_normal_animation(void);
 static void pet_animation_cb(lv_timer_t *timer);
@@ -289,33 +298,113 @@ static void keyboard_event_cb(lv_event_t *e)
     switch (key) {
     case KEY_UP:
         printf("[%s] Keyboard event: UP\n", main_screen.name);
-        // UP key works like LEFT key - navigate to previous icon
-        handle_menu_navigation(key);
+        if (clock_edit_mode) {
+            // In clock edit mode: UP increases value
+            if (clock_edit_hour) {
+                current_hour++;
+                if (current_hour >= 24)
+                    current_hour = 0;
+            } else {
+                current_minute++;
+                if (current_minute >= 60)
+                    current_minute = 0;
+            }
+            printf("[%s] Clock adjusted: %02d:%02d\n", main_screen.name, current_hour, current_minute);
+        } else {
+            // UP key works like LEFT key - navigate to previous icon
+            handle_menu_navigation(key);
+        }
         break;
     case KEY_DOWN:
         printf("[%s] Keyboard event: DOWN\n", main_screen.name);
-        // DOWN key works like RIGHT key - navigate to next icon
-        handle_menu_navigation(key);
+        if (clock_edit_mode) {
+            // In clock edit mode: DOWN decreases value
+            if (clock_edit_hour) {
+                if (current_hour == 0)
+                    current_hour = 23;
+                else
+                    current_hour--;
+            } else {
+                if (current_minute == 0)
+                    current_minute = 59;
+                else
+                    current_minute--;
+            }
+            printf("[%s] Clock adjusted: %02d:%02d\n", main_screen.name, current_hour, current_minute);
+        } else {
+            // DOWN key works like RIGHT key - navigate to next icon
+            handle_menu_navigation(key);
+        }
         break;
     case KEY_LEFT:
         printf("[%s] Keyboard event: LEFT\n", main_screen.name);
-        // Always handle menu navigation for LEFT/RIGHT keys
-        handle_menu_navigation(key);
+        if (clock_edit_mode) {
+            // In clock edit mode: LEFT switches to hour editing
+            clock_edit_hour = true;
+            printf("[%s] Clock editing hour\n", main_screen.name);
+        } else {
+            // Always handle menu navigation for LEFT/RIGHT keys
+            handle_menu_navigation(key);
+        }
         break;
     case KEY_RIGHT:
         printf("[%s] Keyboard event: RIGHT\n", main_screen.name);
-        // Always handle menu navigation for LEFT/RIGHT keys
-        handle_menu_navigation(key);
+        if (clock_edit_mode) {
+            // In clock edit mode: RIGHT switches to minute editing
+            clock_edit_hour = false;
+            printf("[%s] Clock editing minute\n", main_screen.name);
+        } else {
+            // Always handle menu navigation for LEFT/RIGHT keys
+            handle_menu_navigation(key);
+        }
         break;
     case KEY_ENTER:
         printf("[%s] Keyboard event: ENTER\n", main_screen.name);
-        // ENTER always triggers menu selection
-        handle_menu_selection();
+        if (clock_edit_mode) {
+            // In clock edit mode: ENTER saves and exits
+            clock_edit_mode = false;
+            // Save time to system
+            POSIX_TM_S tm     = {0};
+            tm.tm_hour        = current_hour;
+            tm.tm_min         = current_minute;
+            tm.tm_sec         = 0;
+            tm.tm_mday        = 1;
+            tm.tm_mon         = 0;
+            tm.tm_year        = 124; // 2024 - 1900
+            TIME_T posix_time = tal_time_mktime(&tm);
+            if (posix_time > 0) {
+                tal_time_set_posix(posix_time, 2); // 2 = other source
+            }
+            toast_screen_show("Clock saved", 1500);
+            printf("[%s] Clock saved: %02d:%02d\n", main_screen.name, current_hour, current_minute);
+        } else {
+            // ENTER always triggers menu selection
+            handle_menu_selection();
+        }
         break;
     case KEY_ESC:
         printf("[%s] Keyboard event: ESC\n", main_screen.name);
-        // ESC shows help message
-        // toast_screen_show("Use LEFT/RIGHT to select, ENTER to confirm", 2000);
+        // ESC exits clock edit mode or shows help message
+        if (clock_edit_mode) {
+            clock_edit_mode = false;
+            // Save time to system
+            POSIX_TM_S tm     = {0};
+            tm.tm_hour        = current_hour;
+            tm.tm_min         = current_minute;
+            tm.tm_sec         = 0;
+            tm.tm_mday        = 1;
+            tm.tm_mon         = 0;
+            tm.tm_year        = 124; // 2024 - 1900
+            TIME_T posix_time = tal_time_mktime(&tm);
+            if (posix_time > 0) {
+                tal_time_set_posix(posix_time, 2); // 2 = other source
+            }
+            toast_screen_show("Clock saved", 1500);
+            printf("[%s] Clock edit mode exited, time saved: %02d:%02d\n", main_screen.name, current_hour,
+                   current_minute);
+        } else {
+            // toast_screen_show("Use LEFT/RIGHT to select, ENTER to confirm", 2000);
+        }
         break;
     case KEY_JOYCON: {
 #if defined(ENABLE_LVGL_HARDWARE)
@@ -537,21 +626,21 @@ void main_screen_deinit(void)
     simple_pet_area_stop_animation();
 
     // Reset GIF container and image pointers (objects will be cleaned up with parent)
-    gif_container = NULL;
-    pet_image_walk = NULL;
-    pet_image_walk_left = NULL;
-    pet_image_blink = NULL;
-    pet_image_stand = NULL;
-    pet_image_sleep = NULL;
-    pet_image_dance = NULL;
-    pet_image_eat = NULL;
-    pet_image_bath = NULL;
-    pet_image_toilet = NULL;
-    pet_image_sick = NULL;
-    pet_image_happy = NULL;
-    pet_image_angry = NULL;
-    pet_image_cry = NULL;
-    current_normal_image = NULL;
+    gif_container         = NULL;
+    pet_image_walk        = NULL;
+    pet_image_walk_left   = NULL;
+    pet_image_blink       = NULL;
+    pet_image_stand       = NULL;
+    pet_image_sleep       = NULL;
+    pet_image_dance       = NULL;
+    pet_image_eat         = NULL;
+    pet_image_bath        = NULL;
+    pet_image_toilet      = NULL;
+    pet_image_sick        = NULL;
+    pet_image_happy       = NULL;
+    pet_image_angry       = NULL;
+    pet_image_cry         = NULL;
+    current_normal_image  = NULL;
     current_special_image = NULL;
 
     // Remove event callback and delete the main screen object
@@ -566,17 +655,18 @@ void main_screen_deinit(void)
     }
 
     // Reset component pointers
-    status_bar = NULL;
-    pet_area = NULL;
-    bottom_menu = NULL;
+    status_bar      = NULL;
+    pet_area        = NULL;
+    bottom_menu     = NULL;
     horizontal_line = NULL;
 
     // Reset status bar icon pointers
     wifi_icon = NULL;
     // four_g_logo_obj = NULL;
     cellular_icon = NULL;
-    battery_icon = NULL;
+    battery_icon  = NULL;
     battery_label = NULL;
+    clock_label   = NULL;
 
     // Reset menu system variables
 
@@ -636,6 +726,13 @@ static lv_obj_t *simple_status_bar_create(lv_obj_t *parent)
     battery_icon = lv_img_create(status_bar);
     lv_obj_set_size(battery_icon, 24, 24);
     lv_obj_align(battery_icon, LV_ALIGN_RIGHT_MID, -5, 0);
+
+    // Clock label (centered) - simple text label for e-ink display
+    clock_label = lv_label_create(status_bar);
+    lv_obj_set_style_text_font(clock_label, SCREEN_INFO_FONT, 0);
+    lv_obj_set_style_text_color(clock_label, lv_color_black(), 0);
+    lv_obj_align(clock_label, LV_ALIGN_CENTER, 0, 0);
+    lv_label_set_text(clock_label, "12:00");
 
     return status_bar;
 }
@@ -789,18 +886,18 @@ static lv_obj_t *simple_pet_area_create(lv_obj_t *parent)
 
     // Initialize pet state
     current_animation_state = AI_PET_STATE_NORMAL;
-    pet_x_pos = 0;
-    pet_direction = 1;
-    pet_is_walking = false;
-    idle_animation_state = 1;
-    pet_state_timer = 0;
+    pet_x_pos               = 0;
+    pet_direction           = 1;
+    pet_is_walking          = false;
+    idle_animation_state    = 1;
+    pet_state_timer         = 0;
 #if defined(ENABLE_LVGL_HARDWARE)
-    pet_state_duration = PET_IDLE_DURATION_MIN + tal_system_get_random(PET_IDLE_DURATION_MAX - PET_IDLE_DURATION_MIN);
+    pet_state_duration   = PET_IDLE_DURATION_MIN + tal_system_get_random(PET_IDLE_DURATION_MAX - PET_IDLE_DURATION_MIN);
     idle_animation_timer = 0;
     idle_animation_duration = PET_IDLE_ANIMATION_SWITCH_MIN +
                               tal_system_get_random(PET_IDLE_ANIMATION_SWITCH_MAX - PET_IDLE_ANIMATION_SWITCH_MIN);
 #else
-    pet_state_duration = PET_IDLE_DURATION_MIN + (rand() % (PET_IDLE_DURATION_MAX - PET_IDLE_DURATION_MIN));
+    pet_state_duration   = PET_IDLE_DURATION_MIN + (rand() % (PET_IDLE_DURATION_MAX - PET_IDLE_DURATION_MIN));
     idle_animation_timer = 0;
     idle_animation_duration =
         PET_IDLE_ANIMATION_SWITCH_MIN + (rand() % (PET_IDLE_ANIMATION_SWITCH_MAX - PET_IDLE_ANIMATION_SWITCH_MIN));
@@ -1017,7 +1114,7 @@ static void simple_pet_area_start_animation(void)
 #endif
 
     pet_animation_timer = lv_timer_create(pet_animation_cb, PET_ANIMATION_INTERVAL, NULL);
-    pet_movement_timer = lv_timer_create(pet_movement_cb, PET_MOVEMENT_INTERVAL, NULL);
+    pet_movement_timer  = lv_timer_create(pet_movement_cb, PET_MOVEMENT_INTERVAL, NULL);
 
     // Create UI update timer for status bar and animation updates
     ui_update_timer = lv_timer_create(ui_update_timer_cb, UI_UPDATE_INTERVAL, NULL);
@@ -1114,7 +1211,7 @@ void main_screen_set_wifi_state(uint8_t strength)
  */
 void main_screen_set_battery_state(uint8_t level, bool charging)
 {
-    current_battery_level = level;
+    current_battery_level    = level;
     current_battery_charging = charging;
     printf("[%s] Battery state set to: level=%d, charging=%d\n", main_screen.name, level, charging);
 }
@@ -1192,11 +1289,71 @@ static inline const lv_img_dsc_t *get_battery_icon_by_level(uint8_t level, bool 
  */
 static void ui_update_timer_cb(lv_timer_t *timer)
 {
+    static uint32_t second_counter = 0;
+
     if (standby_time++ > STANDBY_TIME * 1000 / UI_UPDATE_INTERVAL) {
         // Enter standby mode
         printf("[%s] Entering standby mode due to inactivity\n", main_screen.name);
         screen_load(&standby_screen);
         standby_time = 0;
+    }
+
+    // Update clock every second
+    second_counter++;
+    if (second_counter >= 1000 / UI_UPDATE_INTERVAL) {
+        second_counter = 0;
+
+        if (!clock_edit_mode) {
+            // Update time from system time (synchronized with RTC/cloud)
+            TIME_T current_posix = tal_time_get_posix();
+
+            // Only update if time has changed (handles potential time jumps)
+            if (current_posix != last_sync_time && current_posix > 0) {
+                last_sync_time = current_posix;
+
+                POSIX_TM_S local_time;
+                if (tal_time_get_local_time_custom(current_posix, &local_time) == OPRT_OK) {
+                    current_hour   = (uint8_t)local_time.tm_hour;
+                    current_minute = (uint8_t)local_time.tm_min;
+                } else {
+                    // Fallback: manual increment if system time fails
+                    current_minute++;
+                    if (current_minute >= 60) {
+                        current_minute = 0;
+                        current_hour++;
+                        if (current_hour >= 24) {
+                            current_hour = 0;
+                        }
+                    }
+                }
+            } else if (current_posix == 0) {
+                // System time not available, use manual increment
+                current_minute++;
+                if (current_minute >= 60) {
+                    current_minute = 0;
+                    current_hour++;
+                    if (current_hour >= 24) {
+                        current_hour = 0;
+                    }
+                }
+            }
+        }
+
+        // Update clock display
+        if (clock_label) {
+            char time_text[16];
+            if (clock_edit_mode) {
+                // Show editing mode with highlighted field
+                if (clock_edit_hour) {
+                    snprintf(time_text, sizeof(time_text), "[%02d]:%02d", current_hour, current_minute);
+                } else {
+                    snprintf(time_text, sizeof(time_text), "%02d:[%02d]", current_hour, current_minute);
+                }
+            } else {
+                snprintf(time_text, sizeof(time_text), "%02d:%02d", current_hour, current_minute);
+            }
+            lv_label_set_text(clock_label, time_text);
+        }
     }
 
     // Update WiFi icon if changed
@@ -1208,7 +1365,7 @@ static void ui_update_timer_cb(lv_timer_t *timer)
     if (cellular_icon) {
 #ifdef ENABLE_LVGL_HARDWARE
         netmgr_status_e status;
-        OPERATE_RET result = netmgr_conn_get(NETCONN_CELLULAR, NETCONN_CMD_STATUS, &status);
+        OPERATE_RET     result = netmgr_conn_get(NETCONN_CELLULAR, NETCONN_CMD_STATUS, &status);
         if (result == OPRT_OK) {
             current_cellular_connected = status;
         }
@@ -1219,8 +1376,8 @@ static void ui_update_timer_cb(lv_timer_t *timer)
 
 #if defined(ENABLE_LVGL_HARDWARE)
     // Read from hardware
-    uint16_t voltage_mv = axp2101_getBattVoltage();
-    uint8_t battery_percent = axp2101_getBatteryPercent();
+    uint16_t voltage_mv      = axp2101_getBattVoltage();
+    uint8_t  battery_percent = axp2101_getBatteryPercent();
     current_battery_charging = axp2101_isCharging();
 
     // Update state
@@ -1237,8 +1394,8 @@ static void ui_update_timer_cb(lv_timer_t *timer)
 #else
     // PC simulator mode - update label based on current state
     if (battery_label) {
-        char battery_text[20];
-        int demo_percent = current_battery_level * 100 / 7;
+        char  battery_text[20];
+        int   demo_percent = current_battery_level * 100 / 7;
         float demo_voltage = 3.0f + (current_battery_level * 1.2f / 6);
         if (current_battery_charging) {
             snprintf(battery_text, sizeof(battery_text), "%.1fV %d%% CHG", demo_voltage, demo_percent);
@@ -1273,7 +1430,7 @@ static void pet_animation_cb(lv_timer_t *timer)
     } else {
         // Special state - get the corresponding special animation
         const lv_img_dsc_t *gif_src = get_gif_src_by_state(current_animation_state, false, 1, 0);
-        target_image = get_gif_object_by_src(gif_src);
+        target_image                = get_gif_object_by_src(gif_src);
     }
 
     // If target image is different from currently visible image, switch
@@ -1326,11 +1483,11 @@ static void pet_animation_cb(lv_timer_t *timer)
 
             // Update current image pointers
             if (current_animation_state == AI_PET_STATE_NORMAL) {
-                current_normal_image = target_image;
+                current_normal_image  = target_image;
                 current_special_image = NULL;
             } else {
                 current_special_image = target_image;
-                current_normal_image = NULL;
+                current_normal_image  = NULL;
             }
         }
     }
@@ -1387,7 +1544,7 @@ static void pet_movement_cb(lv_timer_t *timer)
             pet_state_duration =
                 PET_WALK_DURATION_MIN + tal_system_get_random(PET_WALK_DURATION_MAX - PET_WALK_DURATION_MIN);
 #else
-            pet_direction = (rand() % 2) ? 1 : -1;
+            pet_direction      = (rand() % 2) ? 1 : -1;
             pet_state_duration = PET_WALK_DURATION_MIN + (rand() % (PET_WALK_DURATION_MAX - PET_WALK_DURATION_MIN));
 #endif
 
@@ -1436,7 +1593,7 @@ static void pet_movement_cb(lv_timer_t *timer)
 
         // Bounce off boundaries
         if (pet_x_pos > PET_MOVEMENT_LIMIT) {
-            pet_x_pos = PET_MOVEMENT_LIMIT;
+            pet_x_pos     = PET_MOVEMENT_LIMIT;
             pet_direction = -1;
             const lv_img_dsc_t *new_gif_src =
                 get_gif_src_by_state(AI_PET_STATE_NORMAL, true, pet_direction, idle_animation_state);
@@ -1445,7 +1602,7 @@ static void pet_movement_cb(lv_timer_t *timer)
                 switch_pet_animation(target_image);
             }
         } else if (pet_x_pos < -PET_MOVEMENT_LIMIT) {
-            pet_x_pos = -PET_MOVEMENT_LIMIT;
+            pet_x_pos     = -PET_MOVEMENT_LIMIT;
             pet_direction = 1;
             const lv_img_dsc_t *new_gif_src =
                 get_gif_src_by_state(AI_PET_STATE_NORMAL, true, pet_direction, idle_animation_state);
@@ -1570,7 +1727,7 @@ static uint8_t get_selected_button(void)
 
 void main_screen_register_pet_event_callback(pet_event_callback_t callback, void *user_data)
 {
-    pet_event_callback = callback;
+    pet_event_callback  = callback;
     pet_event_user_data = user_data;
     printf("[%s] Pet event callback registered\n", main_screen.name);
 }
@@ -1617,11 +1774,11 @@ void main_screen_init_pet_stats(pet_stats_t *stats)
         stats = &main_screen_pet_stats;
     }
 
-    stats->health = 85;
-    stats->hungry = 60;
-    stats->clean = 70;
-    stats->happy = 90;
-    stats->age_days = 15;
+    stats->health    = 85;
+    stats->hungry    = 60;
+    stats->clean     = 70;
+    stats->happy     = 90;
+    stats->age_days  = 15;
     stats->weight_kg = 1.2f;
     strncpy(stats->name, "Ducky", sizeof(stats->name) - 1);
     stats->name[sizeof(stats->name) - 1] = '\0';

@@ -27,6 +27,8 @@
 #include "temp_humidity_screen.h"
 #include "ai_log_screen.h"
 #include "photo_screen.h"
+#include "toast_screen.h"
+#include "tal_time_service.h"
 #include <stdio.h>
 
 // Font definitions - easily customizable
@@ -38,17 +40,27 @@
 ***********************variable define**********************
 ***********************************************************/
 
-static lv_obj_t *ui_menu_scan_screen;
-static lv_obj_t *scan_menu_list;
+static lv_obj_t   *ui_menu_scan_screen;
+static lv_obj_t   *scan_menu_list;
 static lv_timer_t *timer;
-static uint8_t selected_item = 0;
-static uint8_t last_selected_item = 0;
+static uint8_t     selected_item      = 0;
+static uint8_t     last_selected_item = 0;
+
+// Clock editing variables
+static uint8_t   clock_hour            = 12;
+static uint8_t   clock_minute          = 0;
+static bool      clock_edit_mode       = false;
+static bool      clock_edit_hour       = true; // true = editing hour, false = editing minute
+static lv_obj_t *clock_edit_popup      = NULL;
+static lv_obj_t *clock_edit_title      = NULL;
+static lv_obj_t *clock_edit_time_label = NULL;
+static lv_obj_t *clock_edit_hint       = NULL;
 
 Screen_t menu_scan_screen = {
-    .init = menu_scan_screen_init,
-    .deinit = menu_scan_screen_deinit,
+    .init       = menu_scan_screen_init,
+    .deinit     = menu_scan_screen_deinit,
     .screen_obj = &ui_menu_scan_screen,
-    .name = "menu_scan_screen",
+    .name       = "menu_scan_screen",
     .state_data = NULL,
 };
 
@@ -69,6 +81,9 @@ static void menu_scan_screen_timer_cb(lv_timer_t *timer);
 static void keyboard_event_cb(lv_event_t *e);
 static void update_selection(uint8_t old_selection, uint8_t new_selection);
 static void handle_scan_selection(void);
+static void show_clock_edit_popup(void);
+static void hide_clock_edit_popup(void);
+static void update_clock_display(void);
 
 /***********************************************************
 ***********************function define**********************
@@ -100,6 +115,59 @@ static void keyboard_event_cb(lv_event_t *e)
     uint32_t key = lv_event_get_key(e);
     printf("[%s] Keyboard event received: key = %d\n", menu_scan_screen.name, key);
 
+    // Handle clock edit mode first if active
+    if (clock_edit_mode) {
+        switch (key) {
+        case KEY_UP:
+            if (clock_edit_hour) {
+                clock_hour = (clock_hour + 1) % 24;
+            } else {
+                clock_minute = (clock_minute + 1) % 60;
+            }
+            update_clock_display();
+            break;
+        case KEY_DOWN:
+            if (clock_edit_hour) {
+                clock_hour = (clock_hour == 0) ? 23 : (clock_hour - 1);
+            } else {
+                clock_minute = (clock_minute == 0) ? 59 : (clock_minute - 1);
+            }
+            update_clock_display();
+            break;
+        case KEY_LEFT:
+            clock_edit_hour = true;
+            update_clock_display();
+            break;
+        case KEY_RIGHT:
+            clock_edit_hour = false;
+            update_clock_display();
+            break;
+        case KEY_ENTER:
+        case KEY_ESC: {
+            // Save time and exit
+            POSIX_TM_S tm     = {0};
+            tm.tm_hour        = clock_hour;
+            tm.tm_min         = clock_minute;
+            tm.tm_sec         = 0;
+            tm.tm_mday        = 1;
+            tm.tm_mon         = 0;
+            tm.tm_year        = 124; // 2024 - 1900
+            TIME_T posix_time = tal_time_mktime(&tm);
+            if (posix_time > 0) {
+                tal_time_set_posix(posix_time, 2); // 2 = other source
+            }
+            printf("[Clock Edit] Time saved: %02d:%02d\n", clock_hour, clock_minute);
+            toast_screen_show("Clock saved", 1500);
+            hide_clock_edit_popup();
+            break;
+        }
+        default:
+            break;
+        }
+        return;
+    }
+
+    // Normal menu mode
     uint32_t child_count = lv_obj_get_child_cnt(scan_menu_list);
     if (child_count == 0)
         return;
@@ -206,6 +274,10 @@ static void handle_scan_selection(void)
         printf("PHOTO selected\n");
         screen_load(&photo_screen);
         break;
+    case 9: // Clock Settings
+        printf("Clock Settings selected\n");
+        show_clock_edit_popup();
+        break;
     default:
         printf("Unknown scan option selected\n");
         break;
@@ -244,56 +316,61 @@ void menu_scan_screen_init(void)
     lv_obj_t *btn;
     lv_obj_t *label;
 
-    btn = lv_list_add_btn(scan_menu_list, LV_SYMBOL_WIFI, "WiFi scan demo");
+    btn   = lv_list_add_btn(scan_menu_list, LV_SYMBOL_WIFI, "WiFi scan demo");
     label = lv_obj_get_child(btn, 1);
     if (label)
         lv_obj_set_style_text_font(label, SCREEN_CONTENT_FONT, 0);
 
-    btn = lv_list_add_btn(scan_menu_list, LV_SYMBOL_SETTINGS, "I2C device scan demo");
+    btn   = lv_list_add_btn(scan_menu_list, LV_SYMBOL_SETTINGS, "I2C device scan demo");
     label = lv_obj_get_child(btn, 1);
     if (label)
         lv_obj_set_style_text_font(label, SCREEN_CONTENT_FONT, 0);
 
-    btn = lv_list_add_btn(scan_menu_list, LV_SYMBOL_PLAY, "Dino Game");
+    btn   = lv_list_add_btn(scan_menu_list, LV_SYMBOL_PLAY, "Dino Game");
     label = lv_obj_get_child(btn, 1);
     if (label)
         lv_obj_set_style_text_font(label, SCREEN_CONTENT_FONT, 0);
 
-    btn = lv_list_add_btn(scan_menu_list, LV_SYMBOL_SHUFFLE, "Snake Game");
+    btn   = lv_list_add_btn(scan_menu_list, LV_SYMBOL_SHUFFLE, "Snake Game");
     label = lv_obj_get_child(btn, 1);
     if (label)
         lv_obj_set_style_text_font(label, SCREEN_CONTENT_FONT, 0);
 
-    btn = lv_list_add_btn(scan_menu_list, LV_SYMBOL_EYE_OPEN, "Level Indicator");
+    btn   = lv_list_add_btn(scan_menu_list, LV_SYMBOL_EYE_OPEN, "Level Indicator");
     label = lv_obj_get_child(btn, 1);
     if (label)
         lv_obj_set_style_text_font(label, SCREEN_CONTENT_FONT, 0);
 
-    btn = lv_list_add_btn(scan_menu_list, LV_SYMBOL_FILE, "E-book Reader");
+    btn   = lv_list_add_btn(scan_menu_list, LV_SYMBOL_FILE, "E-book Reader");
     label = lv_obj_get_child(btn, 1);
     if (label)
         lv_obj_set_style_text_font(label, SCREEN_CONTENT_FONT, 0);
 
-    btn = lv_list_add_btn(scan_menu_list, LV_SYMBOL_WARNING, "Temperature & Humidity");
+    btn   = lv_list_add_btn(scan_menu_list, LV_SYMBOL_WARNING, "Temperature & Humidity");
     label = lv_obj_get_child(btn, 1);
     if (label)
         lv_obj_set_style_text_font(label, SCREEN_CONTENT_FONT, 0);
 
-    btn = lv_list_add_btn(scan_menu_list, LV_SYMBOL_CALL, "AI Log Analyzer");
+    btn   = lv_list_add_btn(scan_menu_list, LV_SYMBOL_CALL, "AI Log Analyzer");
     label = lv_obj_get_child(btn, 1);
     if (label)
         lv_obj_set_style_text_font(label, SCREEN_CONTENT_FONT, 0);
 
-    btn = lv_list_add_btn(scan_menu_list, LV_SYMBOL_IMAGE, "PHOTO");
+    btn   = lv_list_add_btn(scan_menu_list, LV_SYMBOL_IMAGE, "PHOTO");
     label = lv_obj_get_child(btn, 1);
     if (label)
         lv_obj_set_style_text_font(label, SCREEN_CONTENT_FONT, 0);
 
-    selected_item = last_selected_item;
+    btn   = lv_list_add_btn(scan_menu_list, LV_SYMBOL_EDIT, "Clock Settings");
+    label = lv_obj_get_child(btn, 1);
+    if (label)
+        lv_obj_set_style_text_font(label, SCREEN_CONTENT_FONT, 0);
+
+    selected_item        = last_selected_item;
     uint32_t child_count = lv_obj_get_child_cnt(scan_menu_list);
 
     if (selected_item >= child_count) {
-        selected_item = 0;
+        selected_item      = 0;
         last_selected_item = 0;
     }
 
@@ -316,6 +393,16 @@ void menu_scan_screen_init(void)
  */
 void menu_scan_screen_deinit(void)
 {
+    // Clean up clock edit popup if active
+    if (clock_edit_popup) {
+        lv_obj_del(clock_edit_popup);
+        clock_edit_popup = NULL;
+    }
+    clock_edit_title      = NULL;
+    clock_edit_time_label = NULL;
+    clock_edit_hint       = NULL;
+    clock_edit_mode       = false;
+
     if (ui_menu_scan_screen) {
         printf("deinit scan menu screen\n");
         lv_obj_remove_event_cb(ui_menu_scan_screen, NULL);
@@ -333,4 +420,91 @@ void menu_scan_screen_deinit(void)
 void menu_scan_screen_create(void)
 {
     menu_scan_screen_init();
+}
+
+/**
+ * @brief Update clock display
+ */
+static void update_clock_display(void)
+{
+    if (clock_edit_time_label) {
+        char time_text[32];
+        if (clock_edit_hour) {
+            snprintf(time_text, sizeof(time_text), "[%02d]:%02d", clock_hour, clock_minute);
+        } else {
+            snprintf(time_text, sizeof(time_text), "%02d:[%02d]", clock_hour, clock_minute);
+        }
+        lv_label_set_text(clock_edit_time_label, time_text);
+    }
+}
+
+/**
+ * @brief Show clock edit popup
+ */
+static void show_clock_edit_popup(void)
+{
+    // Get current time from system
+    TIME_T current_posix = tal_time_get_posix();
+    if (current_posix > 0) {
+        POSIX_TM_S local_time;
+        if (tal_time_get_local_time_custom(current_posix, &local_time) == OPRT_OK) {
+            clock_hour   = (uint8_t)local_time.tm_hour;
+            clock_minute = (uint8_t)local_time.tm_min;
+        }
+    }
+
+    clock_edit_mode = true;
+    clock_edit_hour = true;
+
+    // Hide the scan menu list
+    lv_obj_add_flag(scan_menu_list, LV_OBJ_FLAG_HIDDEN);
+
+    // Create clock edit popup
+    clock_edit_popup = lv_obj_create(ui_menu_scan_screen);
+    lv_obj_set_size(clock_edit_popup, 364, 148);
+    lv_obj_align(clock_edit_popup, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_set_style_bg_color(clock_edit_popup, lv_color_white(), 0);
+    lv_obj_set_style_border_color(clock_edit_popup, lv_color_black(), 0);
+    lv_obj_set_style_border_width(clock_edit_popup, 2, 0);
+
+    // Title
+    clock_edit_title = lv_label_create(clock_edit_popup);
+    lv_label_set_text(clock_edit_title, "Clock Settings");
+    lv_obj_align(clock_edit_title, LV_ALIGN_TOP_MID, 0, 10);
+    lv_obj_set_style_text_font(clock_edit_title, SCREEN_TITLE_FONT, 0);
+    lv_obj_set_style_text_color(clock_edit_title, lv_color_black(), 0);
+
+    // Clock display
+    clock_edit_time_label = lv_label_create(clock_edit_popup);
+    lv_obj_align(clock_edit_time_label, LV_ALIGN_CENTER, 0, -5);
+    lv_obj_set_style_text_font(clock_edit_time_label, SCREEN_TITLE_FONT, 0);
+    lv_obj_set_style_text_color(clock_edit_time_label, lv_color_black(), 0);
+    update_clock_display();
+
+    // Instructions
+    clock_edit_hint = lv_label_create(clock_edit_popup);
+    lv_label_set_text(clock_edit_hint, "UP/DOWN: Adjust  LEFT/RIGHT: Switch  ENTER/ESC: Save");
+    lv_obj_align(clock_edit_hint, LV_ALIGN_BOTTOM_MID, 0, -10);
+    lv_obj_set_style_text_font(clock_edit_hint, SCREEN_INFO_FONT, 0);
+    lv_obj_set_style_text_color(clock_edit_hint, lv_color_black(), 0);
+}
+
+/**
+ * @brief Hide clock edit popup
+ */
+static void hide_clock_edit_popup(void)
+{
+    clock_edit_mode = false;
+
+    // Clean up popup objects
+    if (clock_edit_popup) {
+        lv_obj_del(clock_edit_popup);
+        clock_edit_popup = NULL;
+    }
+    clock_edit_title      = NULL;
+    clock_edit_time_label = NULL;
+    clock_edit_hint       = NULL;
+
+    // Show the scan menu list again
+    lv_obj_clear_flag(scan_menu_list, LV_OBJ_FLAG_HIDDEN);
 }
