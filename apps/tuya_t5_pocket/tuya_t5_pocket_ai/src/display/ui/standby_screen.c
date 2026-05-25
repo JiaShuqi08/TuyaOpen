@@ -3,12 +3,13 @@
  * @brief Implementation of the standby screen for the application
  *
  * This file contains the implementation of the standby screen which displays
- * "TuyaOpen" text with a 3D horizontal rotation animation effect in black and white.
+ * the current time with a clean, centered design in black and white.
  *
  * The standby screen includes:
  * - A monochrome white background
- * - "TuyaOpen" text with 3D rotation animation (black text)
- * - Smooth animation using LVGL animation API
+ * - Current time display (HH:MM format)
+ * - Current date display
+ * - Real-time clock updates
  * - Keyboard event handling
  *
  * @copyright Copyright (c) 2024 LVGL PC Simulator Project
@@ -16,31 +17,27 @@
 
 #include "standby_screen.h"
 #include <stdio.h>
-#include <math.h>
 #include <string.h>
+#include "tal_time_service.h"
 
 /***********************************************************
 ************************macro define************************
 ***********************************************************/
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
 
-#define ROTATION_DURATION 2000 // Animation duration in milliseconds
-#define LETTER_SPACING    8    // Spacing between letters
+#define UPDATE_INTERVAL 1000 // Update clock every second
 
-// Font definitions - easily customizable
-#define SCREEN_TITLE_FONT &lv_font_montserrat_48
+// Font definitions - using available fonts in the project
+#define CLOCK_FONT &lv_font_terminusTTF_Bold_18
+#define DATE_FONT &lv_font_terminusTTF_Bold_14
 
 /***********************************************************
 ***********************variable define**********************
 ***********************************************************/
 
 static lv_obj_t *ui_standby_screen;
-static lv_obj_t *letter_labels[8]; // "TuyaOpen" has 8 letters
-static lv_anim_t rotation_anims[8];
-static int16_t rotation_angles[8] = {0};
-static const char *text = "TuyaOpen";
+static lv_obj_t *time_label;
+static lv_obj_t *date_label;
+static lv_timer_t *clock_timer;
 
 Screen_t standby_screen = {
     .init = standby_screen_init,
@@ -54,12 +51,52 @@ Screen_t standby_screen = {
 ***********************************************************/
 
 static void keyboard_event_cb(lv_event_t *e);
-static void rotation_anim_cb(void *var, int32_t value);
-static void create_letter_label(int index, char letter, lv_coord_t x_offset);
+static void update_clock(lv_timer_t *timer);
 
 /***********************************************************
 ***********************function define**********************
 ***********************************************************/
+
+/**
+ * @brief Update the clock display
+ *
+ * This function is called by the timer to update the time and date display.
+ *
+ * @param timer The timer object
+ */
+static void update_clock(lv_timer_t *timer)
+{
+    (void)timer; // Unused parameter
+
+    // Get current time from system
+    TIME_T current_posix = tal_time_get_posix();
+    if (current_posix <= 0) {
+        // Fallback if system time is not available
+        lv_label_set_text(time_label, "--:--");
+        lv_label_set_text(date_label, "----/--/--");
+        return;
+    }
+
+    // Get local time
+    POSIX_TM_S local_time;
+    if (tal_time_get_local_time_custom(current_posix, &local_time) != OPRT_OK) {
+        lv_label_set_text(time_label, "--:--");
+        lv_label_set_text(date_label, "----/--/--");
+        return;
+    }
+
+    // Format time string (HH:MM)
+    static char time_str[16];
+    snprintf(time_str, sizeof(time_str), "%02d:%02d",
+             local_time.tm_hour, local_time.tm_min);
+    lv_label_set_text(time_label, time_str);
+
+    // Format date string (YYYY/MM/DD)
+    static char date_str[32];
+    snprintf(date_str, sizeof(date_str), "%04d/%02d/%02d",
+             local_time.tm_year + 1900, local_time.tm_mon + 1, local_time.tm_mday);
+    lv_label_set_text(date_label, date_str);
+}
 
 /**
  * @brief Keyboard event callback
@@ -100,85 +137,10 @@ static void keyboard_event_cb(lv_event_t *e)
 }
 
 /**
- * @brief Animation callback for 3D rotation effect
- *
- * This function is called during animation to update the letter's appearance
- * based on rotation angle, creating a 3D rotation effect.
- *
- * @param var Pointer to the letter index
- * @param value Current rotation angle (0-360 degrees)
- */
-static void rotation_anim_cb(void *var, int32_t value)
-{
-    int index = (int)(intptr_t)var;
-    rotation_angles[index] = value;
-
-    lv_obj_t *label = letter_labels[index];
-    if (!label)
-        return;
-
-    // Convert angle to radians
-    float angle_rad = (value % 360) * M_PI / 180.0f;
-
-    // Calculate scale based on cosine (simulating 3D rotation)
-    // When angle is 0° or 360°, cos = 1 (full width)
-    // When angle is 90° or 270°, cos = 0 (minimal width)
-    float cos_val = cosf(angle_rad);
-    float scale_x = fabsf(cos_val);
-
-    // Minimum scale to prevent complete disappearance
-    if (scale_x < 0.1f)
-        scale_x = 0.1f;
-
-    // Apply horizontal scaling to simulate 3D rotation
-    lv_obj_set_style_transform_pivot_x(label, lv_obj_get_width(label) / 2, 0);
-    lv_obj_set_style_transform_pivot_y(label, lv_obj_get_height(label) / 2, 0);
-
-    // Scale horizontally
-    int32_t scale_x_256 = (int32_t)(scale_x * 256);
-    lv_obj_set_style_transform_scale_x(label, scale_x_256, 0);
-
-    // Adjust opacity based on angle (fade when edge-on)
-    lv_opa_t opa = (lv_opa_t)(LV_OPA_COVER * (0.3f + 0.7f * scale_x));
-    lv_obj_set_style_opa(label, opa, 0);
-}
-
-/**
- * @brief Create a single letter label
- *
- * This function creates a label for a single letter with appropriate styling.
- *
- * @param index Index of the letter in the text
- * @param letter The character to display
- * @param x_offset Horizontal offset from center
- */
-static void create_letter_label(int index, char letter, lv_coord_t x_offset)
-{
-    letter_labels[index] = lv_label_create(ui_standby_screen);
-
-    char letter_str[2] = {letter, '\0'};
-    lv_label_set_text(letter_labels[index], letter_str);
-
-    // Set font to a larger size for better visibility
-    lv_obj_set_style_text_font(letter_labels[index], &lv_font_montserrat_32, 0);
-
-    // Set text color - black only for monochrome display
-    lv_obj_set_style_text_color(letter_labels[index], lv_color_black(), 0);
-
-    // Position the letter
-    lv_obj_align(letter_labels[index], LV_ALIGN_CENTER, x_offset, 0);
-
-    // Enable transform for this object
-    lv_obj_set_style_transform_pivot_x(letter_labels[index], lv_obj_get_width(letter_labels[index]) / 2, 0);
-    lv_obj_set_style_transform_pivot_y(letter_labels[index], lv_obj_get_height(letter_labels[index]) / 2, 0);
-}
-
-/**
  * @brief Initialize the standby screen
  *
  * This function creates the standby screen UI with a white background,
- * creates individual letter labels for "TuyaOpen" in black, and starts the rotation animations
- * with phase offsets to create a wave effect.
+ * creates time and date labels, and starts the clock update timer.
  */
 void standby_screen_init(void)
 {
@@ -191,37 +153,26 @@ void standby_screen_init(void)
     // Set white background for monochrome display
     lv_obj_set_style_bg_color(ui_standby_screen, lv_color_white(), 0);
 
-    // Calculate total width of text
-    int text_len = strlen(text);
-    lv_coord_t letter_width = 20; // Approximate width per letter
-    lv_coord_t total_width = text_len * (letter_width + LETTER_SPACING);
-    lv_coord_t start_x = -total_width / 2 + letter_width / 2;
+    // Create time label (HH:MM)
+    time_label = lv_label_create(ui_standby_screen);
+    lv_label_set_text(time_label, "--:--");
+    lv_obj_set_style_text_font(time_label, CLOCK_FONT, 0);
+    lv_obj_set_style_text_color(time_label, lv_color_black(), 0);
+    lv_obj_align(time_label, LV_ALIGN_CENTER, 0, -20);
 
-    // Create individual letter labels
-    for (int i = 0; i < text_len; i++) {
-        lv_coord_t x_offset = start_x + i * (letter_width + LETTER_SPACING);
-        create_letter_label(i, text[i], x_offset);
-    }
+    // Create date label (YYYY/MM/DD)
+    date_label = lv_label_create(ui_standby_screen);
+    lv_label_set_text(date_label, "----/--/--");
+    lv_obj_set_style_text_font(date_label, DATE_FONT, 0);
+    lv_obj_set_style_text_color(date_label, lv_color_black(), 0);
+    lv_obj_align(date_label, LV_ALIGN_CENTER, 0, 30);
 
-    // Start rotation animations with phase offsets for wave effect
-    for (int i = 0; i < text_len; i++) {
-        lv_anim_init(&rotation_anims[i]);
-        lv_anim_set_var(&rotation_anims[i], (void *)(intptr_t)i);
-        lv_anim_set_exec_cb(&rotation_anims[i], rotation_anim_cb);
-        lv_anim_set_duration(&rotation_anims[i], ROTATION_DURATION);
-        lv_anim_set_repeat_count(&rotation_anims[i], LV_ANIM_REPEAT_INFINITE);
+    // Create timer to update clock every second (repeat indefinitely with -1)
+    clock_timer = lv_timer_create(update_clock, UPDATE_INTERVAL, NULL);
+    lv_timer_set_repeat_count(clock_timer, -1); // -1 means infinite repeat
 
-        // Distribute 8 letters across 180° range with 22.5° spacing (reversed order)
-        // Letter 0: 157.5°, Letter 1: 135°, Letter 2: 112.5°, ..., Letter 7: 0°
-        int32_t start_angle = (text_len - 1 - i) * 22; // Reverse order: 7*22, 6*22, ..., 0*22
-        int32_t end_angle = start_angle + 360;
-        lv_anim_set_values(&rotation_anims[i], start_angle, end_angle);
-
-        // Use linear path for smooth continuous rotation
-        lv_anim_set_path_cb(&rotation_anims[i], lv_anim_path_linear);
-
-        lv_anim_start(&rotation_anims[i]);
-    }
+    // Initial update
+    update_clock(clock_timer);
 
     // Add keyboard event handling
     lv_obj_add_event_cb(ui_standby_screen, keyboard_event_cb, LV_EVENT_KEY, NULL);
@@ -234,18 +185,22 @@ void standby_screen_init(void)
 /**
  * @brief Deinitialize the standby screen
  *
- * This function cleans up the standby screen by stopping all animations,
+ * This function cleans up the standby screen by stopping the clock timer,
  * deleting the UI objects, and removing event callbacks.
  */
 void standby_screen_deinit(void)
 {
     printf("[%s] Deinitializing standby screen\n", standby_screen.name);
 
-    // Stop all animations
-    for (int i = 0; i < 8; i++) {
-        lv_anim_delete(&rotation_anims[i], NULL);
-        letter_labels[i] = NULL;
+    // Stop and delete clock timer
+    if (clock_timer) {
+        lv_timer_delete(clock_timer);
+        clock_timer = NULL;
     }
+
+    // Clear label pointers
+    time_label = NULL;
+    date_label = NULL;
 
     if (ui_standby_screen) {
         lv_obj_remove_event_cb(ui_standby_screen, keyboard_event_cb);
