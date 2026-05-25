@@ -49,11 +49,15 @@ static uint8_t     last_selected_item = 0;
 // Clock editing variables
 static uint8_t   clock_hour            = 12;
 static uint8_t   clock_minute          = 0;
+static uint16_t  clock_year            = 2024;
+static uint8_t   clock_month           = 1;
+static uint8_t   clock_day             = 1;
 static bool      clock_edit_mode       = false;
-static bool      clock_edit_hour       = true; // true = editing hour, false = editing minute
+static uint8_t   clock_edit_field      = 0; // 0=hour, 1=minute, 2=year, 3=month, 4=day
 static lv_obj_t *clock_edit_popup      = NULL;
 static lv_obj_t *clock_edit_title      = NULL;
 static lv_obj_t *clock_edit_time_label = NULL;
+static lv_obj_t *clock_edit_date_label = NULL;
 static lv_obj_t *clock_edit_hint       = NULL;
 
 Screen_t menu_scan_screen = {
@@ -119,45 +123,96 @@ static void keyboard_event_cb(lv_event_t *e)
     if (clock_edit_mode) {
         switch (key) {
         case KEY_UP:
-            if (clock_edit_hour) {
+            switch (clock_edit_field) {
+            case 0: // Hour
                 clock_hour = (clock_hour + 1) % 24;
-            } else {
+                break;
+            case 1: // Minute
                 clock_minute = (clock_minute + 1) % 60;
+                break;
+            case 2: // Year
+                clock_year = (clock_year >= 2100) ? 2000 : (clock_year + 1);
+                break;
+            case 3: // Month
+                clock_month = (clock_month >= 12) ? 1 : (clock_month + 1);
+                break;
+            case 4: // Day
+            {
+                // Get max days for current month/year
+                uint8_t max_days = 31;
+                if (clock_month == 2) {
+                    // Check leap year
+                    if ((clock_year % 4 == 0 && clock_year % 100 != 0) || (clock_year % 400 == 0)) {
+                        max_days = 29;
+                    } else {
+                        max_days = 28;
+                    }
+                } else if (clock_month == 4 || clock_month == 6 || clock_month == 9 || clock_month == 11) {
+                    max_days = 30;
+                }
+                clock_day = (clock_day >= max_days) ? 1 : (clock_day + 1);
+            }
+            break;
             }
             update_clock_display();
             break;
         case KEY_DOWN:
-            if (clock_edit_hour) {
+            switch (clock_edit_field) {
+            case 0: // Hour
                 clock_hour = (clock_hour == 0) ? 23 : (clock_hour - 1);
-            } else {
+                break;
+            case 1: // Minute
                 clock_minute = (clock_minute == 0) ? 59 : (clock_minute - 1);
+                break;
+            case 2: // Year
+                clock_year = (clock_year <= 2000) ? 2100 : (clock_year - 1);
+                break;
+            case 3: // Month
+                clock_month = (clock_month == 1) ? 12 : (clock_month - 1);
+                break;
+            case 4: // Day
+            {
+                uint8_t max_days_d = 31;
+                if (clock_month == 2) {
+                    if ((clock_year % 4 == 0 && clock_year % 100 != 0) || (clock_year % 400 == 0)) {
+                        max_days_d = 29;
+                    } else {
+                        max_days_d = 28;
+                    }
+                } else if (clock_month == 4 || clock_month == 6 || clock_month == 9 || clock_month == 11) {
+                    max_days_d = 30;
+                }
+                clock_day = (clock_day == 1) ? max_days_d : (clock_day - 1);
+            }
+            break;
             }
             update_clock_display();
             break;
         case KEY_LEFT:
-            clock_edit_hour = true;
+            clock_edit_field = (clock_edit_field == 0) ? 4 : (clock_edit_field - 1);
             update_clock_display();
             break;
         case KEY_RIGHT:
-            clock_edit_hour = false;
+            clock_edit_field = (clock_edit_field == 4) ? 0 : (clock_edit_field + 1);
             update_clock_display();
             break;
         case KEY_ENTER:
         case KEY_ESC: {
-            // Save time and exit
+            // Save date and time
             POSIX_TM_S tm     = {0};
             tm.tm_hour        = clock_hour;
             tm.tm_min         = clock_minute;
             tm.tm_sec         = 0;
-            tm.tm_mday        = 1;
-            tm.tm_mon         = 0;
-            tm.tm_year        = 124; // 2024 - 1900
+            tm.tm_mday        = clock_day;
+            tm.tm_mon         = clock_month - 1;
+            tm.tm_year        = clock_year - 1900;
             TIME_T posix_time = tal_time_mktime(&tm);
             if (posix_time > 0) {
                 tal_time_set_posix(posix_time, 2); // 2 = other source
             }
-            printf("[Clock Edit] Time saved: %02d:%02d\n", clock_hour, clock_minute);
-            toast_screen_show("Clock saved", 1500);
+            printf("[Clock Edit] Date & Time saved: %04d-%02d-%02d %02d:%02d\n", 
+                   clock_year, clock_month, clock_day, clock_hour, clock_minute);
+            toast_screen_show("Date & Time saved", 1500);
             hide_clock_edit_popup();
             break;
         }
@@ -429,12 +484,28 @@ static void update_clock_display(void)
 {
     if (clock_edit_time_label) {
         char time_text[32];
-        if (clock_edit_hour) {
+        if (clock_edit_field == 0) {
             snprintf(time_text, sizeof(time_text), "[%02d]:%02d", clock_hour, clock_minute);
-        } else {
+        } else if (clock_edit_field == 1) {
             snprintf(time_text, sizeof(time_text), "%02d:[%02d]", clock_hour, clock_minute);
+        } else {
+            snprintf(time_text, sizeof(time_text), "%02d:%02d", clock_hour, clock_minute);
         }
         lv_label_set_text(clock_edit_time_label, time_text);
+    }
+    
+    if (clock_edit_date_label) {
+        char date_text[32];
+        if (clock_edit_field == 2) {
+            snprintf(date_text, sizeof(date_text), "[%04d]/%02d/%02d", clock_year, clock_month, clock_day);
+        } else if (clock_edit_field == 3) {
+            snprintf(date_text, sizeof(date_text), "%04d/[%02d]/%02d", clock_year, clock_month, clock_day);
+        } else if (clock_edit_field == 4) {
+            snprintf(date_text, sizeof(date_text), "%04d/%02d/[%02d]", clock_year, clock_month, clock_day);
+        } else {
+            snprintf(date_text, sizeof(date_text), "%04d/%02d/%02d", clock_year, clock_month, clock_day);
+        }
+        lv_label_set_text(clock_edit_date_label, date_text);
     }
 }
 
@@ -443,25 +514,28 @@ static void update_clock_display(void)
  */
 static void show_clock_edit_popup(void)
 {
-    // Get current time from system
+    // Get current time and date from system
     TIME_T current_posix = tal_time_get_posix();
     if (current_posix > 0) {
         POSIX_TM_S local_time;
         if (tal_time_get_local_time_custom(current_posix, &local_time) == OPRT_OK) {
             clock_hour   = (uint8_t)local_time.tm_hour;
             clock_minute = (uint8_t)local_time.tm_min;
+            clock_year   = (uint16_t)(local_time.tm_year + 1900);
+            clock_month  = (uint8_t)(local_time.tm_mon + 1);
+            clock_day    = (uint8_t)local_time.tm_mday;
         }
     }
 
-    clock_edit_mode = true;
-    clock_edit_hour = true;
+    clock_edit_mode  = true;
+    clock_edit_field = 0; // Start with hour
 
     // Hide the scan menu list
     lv_obj_add_flag(scan_menu_list, LV_OBJ_FLAG_HIDDEN);
 
     // Create clock edit popup
     clock_edit_popup = lv_obj_create(ui_menu_scan_screen);
-    lv_obj_set_size(clock_edit_popup, 364, 148);
+    lv_obj_set_size(clock_edit_popup, 364, 180);
     lv_obj_align(clock_edit_popup, LV_ALIGN_CENTER, 0, 0);
     lv_obj_set_style_bg_color(clock_edit_popup, lv_color_white(), 0);
     lv_obj_set_style_border_color(clock_edit_popup, lv_color_black(), 0);
@@ -469,16 +543,23 @@ static void show_clock_edit_popup(void)
 
     // Title
     clock_edit_title = lv_label_create(clock_edit_popup);
-    lv_label_set_text(clock_edit_title, "Clock Settings");
+    lv_label_set_text(clock_edit_title, "Date & Time Settings");
     lv_obj_align(clock_edit_title, LV_ALIGN_TOP_MID, 0, 10);
     lv_obj_set_style_text_font(clock_edit_title, SCREEN_TITLE_FONT, 0);
     lv_obj_set_style_text_color(clock_edit_title, lv_color_black(), 0);
 
+    // Date display
+    clock_edit_date_label = lv_label_create(clock_edit_popup);
+    lv_obj_align(clock_edit_date_label, LV_ALIGN_TOP_MID, 0, 35);
+    lv_obj_set_style_text_font(clock_edit_date_label, SCREEN_CONTENT_FONT, 0);
+    lv_obj_set_style_text_color(clock_edit_date_label, lv_color_black(), 0);
+
     // Clock display
     clock_edit_time_label = lv_label_create(clock_edit_popup);
-    lv_obj_align(clock_edit_time_label, LV_ALIGN_CENTER, 0, -5);
+    lv_obj_align(clock_edit_time_label, LV_ALIGN_CENTER, 0, 0);
     lv_obj_set_style_text_font(clock_edit_time_label, SCREEN_TITLE_FONT, 0);
     lv_obj_set_style_text_color(clock_edit_time_label, lv_color_black(), 0);
+
     update_clock_display();
 
     // Instructions
@@ -503,6 +584,7 @@ static void hide_clock_edit_popup(void)
     }
     clock_edit_title      = NULL;
     clock_edit_time_label = NULL;
+    clock_edit_date_label = NULL;
     clock_edit_hint       = NULL;
 
     // Show the scan menu list again
