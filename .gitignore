@@ -39,3 +39,6 @@ tuyadb/
 
 # Docs
 /docs/superpowers/
+
+# Sensitive configuration files
+apps/tuya_t5_pocket/tuya_t5_pocket_ai/include/tuya_config.h
