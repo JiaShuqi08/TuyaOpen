@@ -28,6 +28,7 @@
 #include "ai_log_screen.h"
 #include "photo_screen.h"
 #include "toast_screen.h"
+#include "todo_screen.h"
 #include "tal_time_service.h"
 #include <stdio.h>
 
@@ -329,7 +330,11 @@ static void handle_scan_selection(void)
         printf("PHOTO selected\n");
         screen_load(&photo_screen);
         break;
-    case 9: // Clock Settings
+    case 9: // To-Do List
+        printf("To-Do List selected\n");
+        screen_load(&todo_screen);
+        break;
+    case 10: // Clock Settings
         printf("Clock Settings selected\n");
         show_clock_edit_popup();
         break;
@@ -412,6 +417,11 @@ void menu_scan_screen_init(void)
         lv_obj_set_style_text_font(label, SCREEN_CONTENT_FONT, 0);
 
     btn   = lv_list_add_btn(scan_menu_list, LV_SYMBOL_IMAGE, "PHOTO");
+    label = lv_obj_get_child(btn, 1);
+    if (label)
+        lv_obj_set_style_text_font(label, SCREEN_CONTENT_FONT, 0);
+
+    btn   = lv_list_add_btn(scan_menu_list, LV_SYMBOL_EDIT, "To-Do List");
     label = lv_obj_get_child(btn, 1);
     if (label)
         lv_obj_set_style_text_font(label, SCREEN_CONTENT_FONT, 0);
