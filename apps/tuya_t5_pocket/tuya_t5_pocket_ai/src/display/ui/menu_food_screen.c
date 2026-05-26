@@ -101,8 +101,8 @@ static void pet_state_timer_cb(lv_timer_t *timer)
 {
     printf("[%s] eat animation timer callback - switching to normal state\n", menu_food_screen.name);
 
-    // Switch pet back to normal state
-    main_screen_set_pet_animation_state(AI_PET_STATE_NORMAL);
+    // Animation state is now handled by pet_show_screen
+    // main_screen_set_pet_animation_state(AI_PET_STATE_NORMAL);
 
     // Clean up the timer
     if (pet_state_timer) {
@@ -235,8 +235,8 @@ static void handle_food_selection(void)
             printf("Feeding hamburger - returning to main screen and playing eat animation\n");
             // Return to main screen and play eating animation
             screen_back();
-            // Trigger eating animation on main screen
-            main_screen_set_pet_animation_state(AI_PET_STATE_EAT);
+            // Animation state is now handled by pet_show_screen
+            // main_screen_set_pet_animation_state(AI_PET_STATE_EAT);
 
             // Start timer to switch back to normal state after 3 seconds
             if (pet_state_timer) {
@@ -258,8 +258,8 @@ static void handle_food_selection(void)
             printf("Feeding water - returning to main screen and playing drink animation\n");
             // Return to main screen and play drinking animation
             screen_back();
-            // Trigger drinking animation on main screen
-            main_screen_set_pet_animation_state(AI_PET_STATE_DANCE);
+            // Animation state is now handled by pet_show_screen
+            // main_screen_set_pet_animation_state(AI_PET_STATE_DANCE);
 
             // Start timer to switch back to normal state after 3 seconds
             if (pet_state_timer) {

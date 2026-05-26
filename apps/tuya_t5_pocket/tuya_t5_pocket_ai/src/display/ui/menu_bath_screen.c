@@ -124,8 +124,8 @@ static void pet_state_timer_cb(lv_timer_t *timer)
 {
     printf("[%s] animation timer callback - switching to normal state\n", menu_bath_screen.name);
 
-    // Switch pet back to normal state
-    main_screen_set_pet_animation_state(AI_PET_STATE_NORMAL);
+    // Animation state is now handled by pet_show_screen
+    // main_screen_set_pet_animation_state(AI_PET_STATE_NORMAL);
 
     // Clean up the timer
     if (pet_state_timer) {
@@ -453,7 +453,8 @@ static void handle_bath_selection(void)
 
                 // Return to main screen and play animation
                 screen_back();
-                main_screen_set_pet_animation_state(AI_PET_STATE_TOILET); // Using toilet animation
+                // Animation state is now handled by pet_show_screen
+                // main_screen_set_pet_animation_state(AI_PET_STATE_TOILET);
 
                 // Start timer to switch back to normal state after 2 seconds
                 if (pet_state_timer) {
@@ -475,7 +476,8 @@ static void handle_bath_selection(void)
 
                 // Return to main screen and play animation
                 screen_back();
-                main_screen_set_pet_animation_state(AI_PET_STATE_BATH); // Using bath animation
+                // Animation state is now handled by pet_show_screen
+                // main_screen_set_pet_animation_state(AI_PET_STATE_BATH);
 
                 // Start timer to switch back to normal state after 2 seconds
                 if (pet_state_timer) {

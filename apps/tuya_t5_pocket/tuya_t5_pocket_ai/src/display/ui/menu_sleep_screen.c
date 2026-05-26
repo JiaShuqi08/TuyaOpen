@@ -76,8 +76,8 @@ static void pet_state_timer_cb(lv_timer_t *timer)
 {
     printf("[%s] animation timer callback - switching to normal state\n", menu_sleep_screen.name);
 
-    // Switch pet back to normal state
-    main_screen_set_pet_animation_state(AI_PET_STATE_NORMAL);
+    // Animation state is now handled by pet_show_screen
+    // main_screen_set_pet_animation_state(AI_PET_STATE_NORMAL);
 
     // Clean up the timer
     if (pet_state_timer) {
@@ -281,7 +281,8 @@ static void handle_sleep_selection(void)
 
                 // Return to main screen and play sleep animation
                 screen_back();
-                main_screen_set_pet_animation_state(AI_PET_STATE_SLEEP);
+                // Animation state is now handled by pet_show_screen
+                // main_screen_set_pet_animation_state(AI_PET_STATE_SLEEP);
 
                 // Start timer to switch back to normal state after 2 seconds
                 if (pet_state_timer) {

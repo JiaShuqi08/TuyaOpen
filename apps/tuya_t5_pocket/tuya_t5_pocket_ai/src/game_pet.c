@@ -116,9 +116,10 @@ void _display_pet_state(ai_pet_state_t pet_state)
             break;
     }
 
-    lv_vendor_disp_lock();
-    main_screen_set_pet_animation_state(pet_state);
-    lv_vendor_disp_unlock();
+    // Animation state is now handled by pet_show_screen
+    // lv_vendor_disp_lock();
+    // main_screen_set_pet_animation_state(pet_state);
+    // lv_vendor_disp_unlock();
 }
 
 // show

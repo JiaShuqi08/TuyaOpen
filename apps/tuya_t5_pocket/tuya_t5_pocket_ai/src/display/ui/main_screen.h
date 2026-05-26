@@ -99,12 +99,6 @@ void main_screen_deinit(void);
  */
 
 /**
- * Set pet animation state (state machine only, UI update in timer)
- * @param state Target animation state
- */
-void main_screen_set_pet_animation_state(ai_pet_state_t state);
-
-/**
  * Set WiFi signal strength state (state machine only, UI update in timer)
  * @param strength WiFi signal strength (0-5: 0=off, 1-3=bars, 4=find, 5=add)
  */
